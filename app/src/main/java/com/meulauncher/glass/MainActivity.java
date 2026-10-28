@@ -26,6 +26,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.StateListDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -34,6 +35,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.GridView;
@@ -52,6 +54,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -62,6 +65,7 @@ public class MainActivity extends Activity {
     private static final int AUTO = ViewGroup.LayoutParams.WRAP_CONTENT;
     private static final int BRANCO = Color.WHITE;
     private static final int SUAVE = Color.argb(210, 255, 255, 255);
+    private static final int AZUL = Color.rgb(150, 195, 255);
 
     // true = vidro fosco com fundo borrado; false = vidro simples (mais leve)
     private static final boolean EFEITO_FOSCO = true;
@@ -80,17 +84,31 @@ public class MainActivity extends Activity {
     private static final int I_CONTROLE = 11;
     private static final int I_ANEL = 12;
 
-    // true = cartaz vertical; false = imagem larga
-    private static final boolean CARTAZ_VERTICAL = true;
-    private static final int SEGUNDOS_POR_CARTAZ = 5;
+    private static final int SEGUNDOS_POR_SUGESTAO = 5;
+
+    // Apps que entram como favoritos na primeira vez (se estiverem instalados)
+    private static final String[] FAVORITOS_PADRAO = {
+            "netflix", "youtube", "disney", "prime video", "max",
+            "globoplay", "spotify", "apple tv", "youtube kids"};
 
     private static class Sugestao {
+        final String tipo;
         final String titulo;
-        final Bitmap imagem;
+        final String sinopse;
+        final String detalhe;
+        final String videoId;
+        final Bitmap fundo;
+        final Bitmap cartaz;
 
-        Sugestao(String titulo, Bitmap imagem) {
+        Sugestao(String tipo, String titulo, String sinopse, String detalhe,
+                 String videoId, Bitmap fundo, Bitmap cartaz) {
+            this.tipo = tipo;
             this.titulo = titulo;
-            this.imagem = imagem;
+            this.sinopse = sinopse;
+            this.detalhe = detalhe;
+            this.videoId = videoId;
+            this.fundo = fundo;
+            this.cartaz = cartaz;
         }
     }
 
@@ -497,6 +515,7 @@ public class MainActivity extends Activity {
     private final List<ResolveInfo> apps = new ArrayList<>();
     private final List<String> favoritos = new ArrayList<>();
     private final List<Sugestao> sugestoes = new ArrayList<>();
+    private final ImageView[] cartazes = new ImageView[6];
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private Bitmap foto;
@@ -508,8 +527,13 @@ public class MainActivity extends Activity {
     private FrameLayout overlay;
     private boolean modoFavoritos = false;
     private View primeiroFoco;
-    private ImageView imagemCartaz;
-    private TextView tituloCartaz;
+    private ImageView imagemBanner;
+    private TextView rotuloTipo;
+    private TextView tituloBanner;
+    private TextView sinopseBanner;
+    private TextView rotuloBotao;
+    private Sugestao atual;
+    private int cartazesUsados = 0;
     private int indice = 0;
 
     private final Runnable girar = new Runnable() {
@@ -519,7 +543,7 @@ public class MainActivity extends Activity {
                 indice = (indice + 1) % sugestoes.size();
                 mostrar(sugestoes.get(indice));
             }
-            handler.postDelayed(this, SEGUNDOS_POR_CARTAZ * 1000L);
+            handler.postDelayed(this, SEGUNDOS_POR_SUGESTAO * 1000L);
         }
     };
 
@@ -567,7 +591,7 @@ public class MainActivity extends Activity {
         super.onResume();
         handler.removeCallbacks(girar);
         if (!sugestoes.isEmpty()) {
-            handler.postDelayed(girar, SEGUNDOS_POR_CARTAZ * 1000L);
+            handler.postDelayed(girar, SEGUNDOS_POR_SUGESTAO * 1000L);
         }
     }
 
@@ -602,12 +626,12 @@ public class MainActivity extends Activity {
     }
 
     private Bitmap reduzir(Bitmap origem, int larguraAlvo) {
-        Bitmap atual = origem;
-        while (atual.getWidth() / 2 >= larguraAlvo) {
-            atual = Bitmap.createScaledBitmap(atual, atual.getWidth() / 2,
-                    atual.getHeight() / 2, true);
+        Bitmap atualBitmap = origem;
+        while (atualBitmap.getWidth() / 2 >= larguraAlvo) {
+            atualBitmap = Bitmap.createScaledBitmap(atualBitmap, atualBitmap.getWidth() / 2,
+                    atualBitmap.getHeight() / 2, true);
         }
-        return atual;
+        return atualBitmap;
     }
 
     private Bitmap criarFundoDesfocado() {
@@ -621,6 +645,16 @@ public class MainActivity extends Activity {
         base.setBounds(0, 0, 96, 54);
         base.draw(new Canvas(medio));
         return Bitmap.createScaledBitmap(medio, 48, 27, true);
+    }
+
+    private void arredondar(View v, final int raioDp) {
+        v.setClipToOutline(true);
+        v.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(raioDp));
+            }
+        });
     }
 
     private LinearLayout item(int tipo, String nome, boolean ativo, int raio,
@@ -712,30 +746,55 @@ public class MainActivity extends Activity {
 
         LinearLayout linha1 = horizontal();
         linha1.addView(criarBanner(), lp(0, TODO, 1f));
-        LinearLayout.LayoutParams paramSug = lp(dp(CARTAZ_VERTICAL ? 150 : 230), TODO);
+        LinearLayout.LayoutParams paramSug = lp(dp(220), TODO);
         paramSug.leftMargin = dp(12);
         linha1.addView(criarPainelSugestoes(), paramSug);
-        conteudo.addView(linha1, lp(TODO, 0, 4f));
+        conteudo.addView(linha1, lp(TODO, 0, 4.5f));
 
         conteudo.addView(secao("Seus aplicativos favoritos"), lp(TODO, AUTO));
-        conteudo.addView(criarFaixaFavoritos(), lp(TODO, 0, 2.4f));
+        conteudo.addView(criarFaixaFavoritos(), lp(TODO, 0, 2.5f));
         conteudo.addView(secao("Todos os aplicativos"), lp(TODO, AUTO));
-        conteudo.addView(criarCategorias(), lp(TODO, 0, 1.6f));
+        conteudo.addView(criarCategorias(), lp(TODO, 0, 1.5f));
         return conteudo;
     }
 
+    // Banner grande: sugestões de filmes, séries e vídeos, um por vez
     private View criarBanner() {
-        LinearLayout banner = vertical();
+        FrameLayout banner = new FrameLayout(this);
         banner.setBackground(criarVidro(22, true));
-        banner.setPadding(dp(22), dp(16), dp(22), dp(14));
+        arredondar(banner, 22);
 
-        banner.addView(texto("SUGESTÕES DE FILMES E SÉRIES", 9, SUAVE));
-        TextView titulo = texto("Histórias que\nvão te prender", 26, BRANCO);
-        titulo.setTypeface(null, Typeface.BOLD);
-        titulo.setPadding(0, dp(6), 0, dp(6));
-        banner.addView(titulo);
-        banner.addView(texto("Filmes e séries incríveis, dos maiores sucessos\n"
-                + "aos lançamentos mais esperados.", 11, SUAVE));
+        imagemBanner = new ImageView(this);
+        imagemBanner.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        FrameLayout.LayoutParams pImagem = new FrameLayout.LayoutParams(TODO, TODO);
+        pImagem.setMargins(dp(2), dp(2), dp(2), dp(2));
+        banner.addView(imagemBanner, pImagem);
+
+        View escurecer = new View(this);
+        escurecer.setBackground(new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{0xE6000000, 0x99000000, 0x00000000}));
+        FrameLayout.LayoutParams pEscurecer = new FrameLayout.LayoutParams(TODO, TODO);
+        pEscurecer.setMargins(dp(2), dp(2), dp(2), dp(2));
+        banner.addView(escurecer, pEscurecer);
+
+        LinearLayout textos = vertical();
+        textos.setPadding(dp(22), dp(16), dp(22), dp(14));
+
+        rotuloTipo = texto("SUGESTÕES DE FILMES E SÉRIES", 9, SUAVE);
+        textos.addView(rotuloTipo);
+
+        tituloBanner = texto("Carregando sugestões...", 24, BRANCO);
+        tituloBanner.setTypeface(null, Typeface.BOLD);
+        tituloBanner.setMaxLines(2);
+        tituloBanner.setEllipsize(TextUtils.TruncateAt.END);
+        tituloBanner.setPadding(0, dp(6), 0, dp(6));
+        textos.addView(tituloBanner);
+
+        sinopseBanner = texto("", 11, SUAVE);
+        sinopseBanner.setMaxLines(3);
+        sinopseBanner.setEllipsize(TextUtils.TruncateAt.END);
+        textos.addView(sinopseBanner);
 
         LinearLayout botao = horizontal();
         botao.setGravity(Gravity.CENTER_VERTICAL);
@@ -743,16 +802,95 @@ public class MainActivity extends Activity {
         botao.setFocusable(true);
         botao.setBackground(fundoFoco(18, criarVidro(18)));
         botao.addView(new IconeView(this, I_PLAY), lp(dp(16), dp(16)));
-        TextView rotulo = texto("Ver mais", 13, BRANCO);
-        rotulo.setPadding(dp(8), 0, 0, 0);
-        botao.addView(rotulo);
-        botao.setOnClickListener(v -> avisar("Ver mais"));
+        rotuloBotao = texto("Ver mais", 13, BRANCO);
+        rotuloBotao.setPadding(dp(8), 0, 0, 0);
+        botao.addView(rotuloBotao);
+        botao.setOnClickListener(v -> acaoDoBanner());
         LinearLayout.LayoutParams pb = lp(AUTO, AUTO);
         pb.topMargin = dp(12);
-        banner.addView(botao, pb);
+        textos.addView(botao, pb);
+
+        banner.addView(textos, new FrameLayout.LayoutParams(dp(320), TODO));
         return banner;
     }
 
+    private void acaoDoBanner() {
+        if (atual == null) {
+            return;
+        }
+        if (atual.videoId != null) {
+            abrirYoutube(atual.videoId);
+        } else {
+            abrirDetalhes(atual);
+        }
+    }
+
+    private void abrirYoutube(String videoId) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://www.youtube.com/watch?v=" + videoId));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível abrir o YouTube", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Tela de detalhes ("Ver mais"): sinopse inteira, ano e nota
+    private void abrirDetalhes(Sugestao s) {
+        if (overlay != null) {
+            return;
+        }
+        modoFavoritos = false;
+        overlay = new FrameLayout(this);
+        overlay.setBackground(fundoTela());
+
+        ImageView imagem = new ImageView(this);
+        imagem.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        imagem.setImageBitmap(s.fundo);
+        overlay.addView(imagem, new FrameLayout.LayoutParams(TODO, TODO));
+
+        View escurecer = new View(this);
+        escurecer.setBackground(new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{0xF2000000, 0xB3000000, 0x33000000}));
+        overlay.addView(escurecer, new FrameLayout.LayoutParams(TODO, TODO));
+
+        LinearLayout textos = vertical();
+        textos.setPadding(dp(48), dp(40), dp(48), dp(32));
+        textos.addView(texto(s.tipo.toUpperCase(Locale.ROOT), 11, SUAVE));
+
+        TextView titulo = texto(s.titulo, 30, BRANCO);
+        titulo.setTypeface(null, Typeface.BOLD);
+        titulo.setMaxLines(3);
+        titulo.setEllipsize(TextUtils.TruncateAt.END);
+        titulo.setPadding(0, dp(8), 0, dp(6));
+        textos.addView(titulo);
+
+        textos.addView(texto(s.detalhe, 13, SUAVE));
+
+        TextView sinopse = texto(s.sinopse, 14, BRANCO);
+        sinopse.setMaxLines(9);
+        sinopse.setEllipsize(TextUtils.TruncateAt.END);
+        sinopse.setPadding(0, dp(14), 0, dp(18));
+        textos.addView(sinopse);
+
+        LinearLayout fechar = horizontal();
+        fechar.setGravity(Gravity.CENTER_VERTICAL);
+        fechar.setPadding(dp(22), dp(8), dp(22), dp(8));
+        fechar.setFocusable(true);
+        fechar.setBackground(fundoFoco(18, criarVidro(18)));
+        fechar.addView(texto("Fechar", 13, BRANCO));
+        fechar.setOnClickListener(v -> fecharTodosApps());
+        textos.addView(fechar, lp(AUTO, AUTO));
+
+        overlay.addView(textos, new FrameLayout.LayoutParams(dp(420), TODO));
+        raiz.addView(overlay, new FrameLayout.LayoutParams(TODO, TODO));
+        coluna.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        fechar.requestFocus();
+    }
+
+    // Painel da direita: grade com 6 cartazes
     private View criarPainelSugestoes() {
         LinearLayout painel = vertical();
         painel.setBackground(criarVidro(22));
@@ -764,39 +902,25 @@ public class MainActivity extends Activity {
         cabecalho.addView(new IconeView(this, I_SETA), lp(dp(14), dp(14)));
         painel.addView(cabecalho, lp(TODO, AUTO));
 
-        LinearLayout.LayoutParams pc = lp(TODO, 0, 1f);
-        pc.topMargin = dp(8);
-        painel.addView(criarCartaz(), pc);
-        return painel;
-    }
-
-    private View criarCartaz() {
-        FrameLayout cartaz = new FrameLayout(this);
-        cartaz.setBackground(cor(20, 14));
-        cartaz.setClipToOutline(true);
-        cartaz.setOutlineProvider(new ViewOutlineProvider() {
-            @Override
-            public void getOutline(View view, Outline outline) {
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(14));
+        for (int linha = 0; linha < 2; linha++) {
+            LinearLayout fila = horizontal();
+            for (int col = 0; col < 3; col++) {
+                ImageView cartaz = new ImageView(this);
+                cartaz.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                cartaz.setBackground(cor(25, 10));
+                arredondar(cartaz, 10);
+                cartazes[linha * 3 + col] = cartaz;
+                LinearLayout.LayoutParams p = lp(0, TODO, 1f);
+                p.setMargins(dp(3), dp(3), dp(3), dp(3));
+                fila.addView(cartaz, p);
             }
-        });
-
-        imagemCartaz = new ImageView(this);
-        imagemCartaz.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        cartaz.addView(imagemCartaz, new FrameLayout.LayoutParams(TODO, TODO));
-
-        LinearLayout rodape = vertical();
-        rodape.setBackground(new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000, 0xCC000000}));
-        rodape.setPadding(dp(8), dp(24), dp(8), dp(6));
-        tituloCartaz = texto("Carregando sugestões...", 11, BRANCO);
-        tituloCartaz.setMaxLines(2);
-        tituloCartaz.setEllipsize(TextUtils.TruncateAt.END);
-        rodape.addView(tituloCartaz);
-        rodape.addView(texto("Fonte: TMDB", 8, SUAVE));
-        cartaz.addView(rodape, new FrameLayout.LayoutParams(TODO, AUTO, Gravity.BOTTOM));
-        return cartaz;
+            LinearLayout.LayoutParams pf = lp(TODO, 0, 1f);
+            if (linha == 0) {
+                pf.topMargin = dp(6);
+            }
+            painel.addView(fila, pf);
+        }
+        return painel;
     }
 
     private View criarFaixaFavoritos() {
@@ -807,6 +931,7 @@ public class MainActivity extends Activity {
 
         linhaFavoritos = horizontal();
         linhaFavoritos.setClipChildren(false);
+        linhaFavoritos.setGravity(Gravity.CENTER_VERTICAL);
         preencherFavoritos();
 
         faixa.addView(linhaFavoritos, new FrameLayout.LayoutParams(AUTO, TODO));
@@ -832,7 +957,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "Removido dos favoritos", Toast.LENGTH_SHORT).show();
                 return true;
             });
-            LinearLayout.LayoutParams p = lp(dp(110), TODO);
+            LinearLayout.LayoutParams p = lp(dp(86), dp(86));
             p.rightMargin = dp(12);
             linhaFavoritos.addView(tile, p);
         }
@@ -840,16 +965,16 @@ public class MainActivity extends Activity {
         mais.addView(texto("+", 28, BRANCO));
         mais.addView(texto("Adicionar", 10, BRANCO));
         mais.setOnClickListener(v -> abrirTodosApps(true));
-        linhaFavoritos.addView(mais, lp(dp(110), TODO));
+        linhaFavoritos.addView(mais, lp(dp(86), dp(86)));
     }
 
     private View criarCategorias() {
         LinearLayout linha = horizontal();
-        linha.addView(criarCategoria(I_PLAY, "Filmes e Séries", "Seus favoritos, sem limites"), pesoCategoria(false));
-        linha.addView(criarCategoria(I_NOTA, "Música", "Sua trilha sonora"), pesoCategoria(false));
-        linha.addView(criarCategoria(I_BOLA, "Esportes", "Ao vivo e muito mais"), pesoCategoria(false));
+        linha.addView(criarCategoria(I_PLAY, "Filmes e Séries", "Sua diversão sem limites"), pesoCategoria(false));
+        linha.addView(criarCategoria(I_NOTA, "Música", "Suas playlists favoritas"), pesoCategoria(false));
+        linha.addView(criarCategoria(I_BOLA, "Esportes", "Os melhores jogos"), pesoCategoria(false));
         linha.addView(criarCategoria(I_JOGO, "Jogos", "Diversão garantida"), pesoCategoria(false));
-        linha.addView(criarCategoria(I_ENGRENAGEM, "Utilitários", "Mais para você"), pesoCategoria(true));
+        linha.addView(criarCategoria(I_ENGRENAGEM, "Utilitários", "Mais praticidade"), pesoCategoria(true));
         return linha;
     }
 
@@ -933,20 +1058,34 @@ public class MainActivity extends Activity {
             caixa.addView(texto("Aperte OK para marcar ou desmarcar. Voltar para concluir.",
                     12, SUAVE));
         }
+        final TextView nomeSelecionado = texto(" ", 14, SUAVE);
+        nomeSelecionado.setPadding(0, dp(6), 0, 0);
+        caixa.addView(nomeSelecionado);
 
         GridView grade = new GridView(this);
         grade.setNumColumns(6);
         grade.setVerticalSpacing(dp(12));
         grade.setHorizontalSpacing(dp(12));
-        grade.setPadding(0, dp(16), 0, 0);
+        grade.setPadding(0, dp(12), 0, 0);
         grade.setClipToPadding(false);
         GradientDrawable destaque = new GradientDrawable();
-        destaque.setColor(Color.argb(50, 255, 255, 255));
-        destaque.setStroke(dp(3), Color.WHITE);
+        destaque.setColor(Color.argb(40, 255, 255, 255));
+        destaque.setStroke(dp(3), AZUL);
         destaque.setCornerRadius(dp(18));
         grade.setSelector(destaque);
         grade.setDrawSelectorOnTop(true);
         grade.setAdapter(new AppsAdapter());
+        grade.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> pai, View v, int posicao, long id) {
+                nomeSelecionado.setText(apps.get(posicao).loadLabel(getPackageManager()));
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> pai) {
+                nomeSelecionado.setText(" ");
+            }
+        });
         grade.setOnItemClickListener((pai, v, posicao, id) -> {
             ResolveInfo info = apps.get(posicao);
             if (modoFavoritos) {
@@ -981,13 +1120,40 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String rotulo(ResolveInfo info) {
+        return info.loadLabel(getPackageManager()).toString().toLowerCase(Locale.ROOT).trim();
+    }
+
+    private ResolveInfo acharPorNome(String chave) {
+        for (ResolveInfo info : apps) {
+            if (rotulo(info).equals(chave)) {
+                return info;
+            }
+        }
+        for (ResolveInfo info : apps) {
+            if (rotulo(info).contains(chave)) {
+                return info;
+            }
+        }
+        return null;
+    }
+
     private void carregarFavoritos() {
         prefs = getSharedPreferences("launcher", MODE_PRIVATE);
         String salvo = prefs.getString("favoritos", null);
         favoritos.clear();
         if (salvo == null) {
-            for (int i = 0; i < Math.min(8, apps.size()); i++) {
-                favoritos.add(apps.get(i).activityInfo.packageName);
+            for (String chave : FAVORITOS_PADRAO) {
+                ResolveInfo achado = acharPorNome(chave);
+                if (achado != null
+                        && !favoritos.contains(achado.activityInfo.packageName)) {
+                    favoritos.add(achado.activityInfo.packageName);
+                }
+            }
+            if (favoritos.isEmpty()) {
+                for (int i = 0; i < Math.min(8, apps.size()); i++) {
+                    favoritos.add(apps.get(i).activityInfo.packageName);
+                }
             }
         } else if (!salvo.isEmpty()) {
             for (String pacote : salvo.split(",")) {
@@ -1020,36 +1186,57 @@ public class MainActivity extends Activity {
     }
 
     private void mostrar(final Sugestao s) {
-        imagemCartaz.animate().alpha(0f).setDuration(250).withEndAction(() -> {
-            imagemCartaz.setImageBitmap(s.imagem);
-            tituloCartaz.setText(s.titulo);
-            imagemCartaz.animate().alpha(1f).setDuration(350).start();
+        atual = s;
+        imagemBanner.animate().alpha(0f).setDuration(250).withEndAction(() -> {
+            imagemBanner.setImageBitmap(s.fundo);
+            rotuloTipo.setText(s.videoId != null
+                    ? "VÍDEOS EM ALTA NO YOUTUBE" : "SUGESTÕES DE FILMES E SÉRIES");
+            tituloBanner.setText(s.titulo);
+            sinopseBanner.setText(s.sinopse);
+            rotuloBotao.setText(s.videoId != null ? "Assistir" : "Ver mais");
+            imagemBanner.animate().alpha(1f).setDuration(350).start();
         }).start();
     }
 
     private void adicionar(Sugestao s) {
         sugestoes.add(s);
+        if (s.cartaz != null && cartazesUsados < cartazes.length) {
+            cartazes[cartazesUsados].setImageBitmap(s.cartaz);
+            cartazesUsados++;
+        }
         if (sugestoes.size() == 1) {
             indice = 0;
             mostrar(s);
             handler.removeCallbacks(girar);
-            handler.postDelayed(girar, SEGUNDOS_POR_CARTAZ * 1000L);
+            handler.postDelayed(girar, SEGUNDOS_POR_SUGESTAO * 1000L);
         }
     }
 
     private void avisarSemSugestoes(final String mensagem) {
         runOnUiThread(() -> {
             if (sugestoes.isEmpty()) {
-                tituloCartaz.setText(mensagem);
+                tituloBanner.setText(mensagem);
             }
         });
     }
 
     private void carregarSugestoes() {
-        if (BuildConfig.TMDB_TOKEN.isEmpty()) {
-            avisarSemSugestoes("Sem chave do TMDB");
-            return;
+        boolean achouFilmes = carregarFilmes();
+        boolean achouVideos = carregarVideos();
+        if (!achouFilmes && !achouVideos) {
+            if (BuildConfig.TMDB_TOKEN.isEmpty() && BuildConfig.YOUTUBE_KEY.isEmpty()) {
+                avisarSemSugestoes("Sem chaves de sugestões");
+            } else {
+                avisarSemSugestoes("Sem sugestões agora");
+            }
         }
+    }
+
+    private boolean carregarFilmes() {
+        if (BuildConfig.TMDB_TOKEN.isEmpty()) {
+            return false;
+        }
+        boolean achou = false;
         try {
             URL url = new URL("https://api.themoviedb.org/3/trending/all/week?language=pt-BR");
             HttpURLConnection conexao = (HttpURLConnection) url.openConnection();
@@ -1058,36 +1245,106 @@ public class MainActivity extends Activity {
             conexao.setConnectTimeout(8000);
             conexao.setReadTimeout(8000);
             if (conexao.getResponseCode() != 200) {
-                avisarSemSugestoes("Sem sugestões agora");
-                return;
+                return false;
             }
             JSONArray lista = new JSONObject(lerTudo(conexao.getInputStream()))
                     .getJSONArray("results");
 
-            String campo = CARTAZ_VERTICAL ? "poster_path" : "backdrop_path";
             int encontrados = 0;
             for (int i = 0; i < lista.length() && encontrados < 10; i++) {
                 JSONObject o = lista.getJSONObject(i);
-                if (o.isNull(campo)) {
+                if (o.isNull("backdrop_path") || o.isNull("poster_path")) {
                     continue;
                 }
+                String media = o.optString("media_type", "");
+                boolean serie = media.equals("tv");
                 String titulo = (o.has("title") && !o.isNull("title"))
                         ? o.getString("title") : o.optString("name", "");
-                Bitmap imagem = baixarImagem(
-                        "https://image.tmdb.org/t/p/w500" + o.getString(campo));
-                if (imagem == null) {
+                String sinopse = o.isNull("overview") ? "" : o.optString("overview", "");
+                String data = o.optString(serie ? "first_air_date" : "release_date", "");
+                String ano = data.length() >= 4 ? data.substring(0, 4) : "";
+                double nota = o.optDouble("vote_average", 0);
+                StringBuilder detalhe = new StringBuilder(ano);
+                if (nota > 0) {
+                    if (detalhe.length() > 0) {
+                        detalhe.append("  •  ");
+                    }
+                    detalhe.append("Nota ")
+                            .append(String.format(Locale.US, "%.1f", nota).replace('.', ','));
+                }
+                Bitmap fundo = baixarImagem(
+                        "https://image.tmdb.org/t/p/w780" + o.getString("backdrop_path"));
+                Bitmap cartaz = baixarImagem(
+                        "https://image.tmdb.org/t/p/w342" + o.getString("poster_path"));
+                if (fundo == null || cartaz == null) {
                     continue;
                 }
                 encontrados++;
-                final Sugestao s = new Sugestao(titulo, imagem);
+                achou = true;
+                final Sugestao s = new Sugestao(serie ? "Série" : "Filme", titulo, sinopse,
+                        detalhe.toString(), null, fundo, cartaz);
                 runOnUiThread(() -> adicionar(s));
             }
-            if (encontrados == 0) {
-                avisarSemSugestoes("Sem sugestões agora");
+        } catch (Exception e) {
+            return achou;
+        }
+        return achou;
+    }
+
+    private boolean carregarVideos() {
+        if (BuildConfig.YOUTUBE_KEY.isEmpty()) {
+            return false;
+        }
+        boolean achou = false;
+        try {
+            URL url = new URL("https://www.googleapis.com/youtube/v3/videos"
+                    + "?part=snippet&chart=mostPopular&regionCode=BR&maxResults=8&key="
+                    + BuildConfig.YOUTUBE_KEY);
+            HttpURLConnection conexao = (HttpURLConnection) url.openConnection();
+            conexao.setConnectTimeout(8000);
+            conexao.setReadTimeout(8000);
+            if (conexao.getResponseCode() != 200) {
+                return false;
+            }
+            JSONArray itens = new JSONObject(lerTudo(conexao.getInputStream()))
+                    .getJSONArray("items");
+
+            int total = 0;
+            for (int i = 0; i < itens.length() && total < 5; i++) {
+                JSONObject item = itens.getJSONObject(i);
+                String id = item.getString("id");
+                JSONObject snippet = item.getJSONObject("snippet");
+                JSONObject miniaturas = snippet.getJSONObject("thumbnails");
+                String endereco = null;
+                String[] tamanhos = {"maxres", "standard", "high"};
+                for (String tamanho : tamanhos) {
+                    if (miniaturas.has(tamanho)) {
+                        endereco = miniaturas.getJSONObject(tamanho).getString("url");
+                        break;
+                    }
+                }
+                if (endereco == null) {
+                    continue;
+                }
+                Bitmap fundo = baixarImagem(endereco);
+                if (fundo == null) {
+                    continue;
+                }
+                String canal = snippet.optString("channelTitle", "");
+                String descricao = snippet.optString("description", "").replace('\n', ' ');
+                if (descricao.trim().isEmpty()) {
+                    descricao = canal;
+                }
+                total++;
+                achou = true;
+                final Sugestao s = new Sugestao("Vídeo", snippet.getString("title"),
+                        descricao, canal, id, fundo, null);
+                runOnUiThread(() -> adicionar(s));
             }
         } catch (Exception e) {
-            avisarSemSugestoes("Sem sugestões agora");
+            return achou;
         }
+        return achou;
     }
 
     private String lerTudo(InputStream entrada) throws Exception {
@@ -1126,25 +1383,21 @@ public class MainActivity extends Activity {
         return tile;
     }
 
+    // Favorito: só o ícone, grande e sem nome
     private View criarTile(final ResolveInfo info) {
         PackageManager pm = getPackageManager();
         LinearLayout tile = criarTileBase();
 
         ImageView icone = new ImageView(this);
         icone.setImageDrawable(info.loadIcon(pm));
-        tile.addView(icone, lp(dp(46), dp(46)));
-
-        TextView nome = texto(info.loadLabel(pm).toString(), 10, BRANCO);
-        nome.setGravity(Gravity.CENTER);
-        nome.setMaxLines(2);
-        nome.setEllipsize(TextUtils.TruncateAt.END);
-        nome.setPadding(0, dp(4), 0, 0);
-        tile.addView(nome, lp(TODO, AUTO));
+        icone.setContentDescription(info.loadLabel(pm));
+        tile.addView(icone, lp(dp(58), dp(58)));
 
         tile.setOnClickListener(v -> abrir(info));
         return tile;
     }
 
+    // Lista de todos os apps: só os ícones
     private class AppsAdapter extends BaseAdapter {
         @Override
         public int getCount() {
@@ -1165,27 +1418,17 @@ public class MainActivity extends Activity {
         public View getView(int i, View convertView, ViewGroup parent) {
             LinearLayout linha;
             ImageView icone;
-            TextView nome;
             if (convertView == null) {
                 linha = vertical();
                 linha.setGravity(Gravity.CENTER);
-                linha.setPadding(dp(8), dp(12), dp(8), dp(10));
+                linha.setPadding(dp(10), dp(12), dp(10), dp(12));
 
                 icone = new ImageView(MainActivity.this);
                 icone.setId(1);
-                linha.addView(icone, lp(dp(64), dp(64)));
-
-                nome = texto("", 12, BRANCO);
-                nome.setId(2);
-                nome.setGravity(Gravity.CENTER);
-                nome.setMaxLines(2);
-                nome.setEllipsize(TextUtils.TruncateAt.END);
-                nome.setPadding(0, dp(4), 0, 0);
-                linha.addView(nome);
+                linha.addView(icone, lp(dp(76), dp(76)));
             } else {
                 linha = (LinearLayout) convertView;
                 icone = linha.findViewById(1);
-                nome = linha.findViewById(2);
             }
             PackageManager pm = getPackageManager();
             ResolveInfo info = apps.get(i);
@@ -1193,7 +1436,7 @@ public class MainActivity extends Activity {
                     && favoritos.contains(info.activityInfo.packageName);
             linha.setBackground(cor(marcado ? 70 : 0, 14));
             icone.setImageDrawable(info.loadIcon(pm));
-            nome.setText(info.loadLabel(pm));
+            icone.setContentDescription(info.loadLabel(pm));
             return linha;
         }
     }
@@ -1240,12 +1483,19 @@ public class MainActivity extends Activity {
         return d;
     }
 
+    // Item selecionado: anel azul claro com brilho, como o Netflix da imagem
     private Drawable fundoFoco(int raio, Drawable normal) {
-        GradientDrawable brilhoFoco = new GradientDrawable();
-        brilhoFoco.setColor(Color.argb(50, 255, 255, 255));
-        brilhoFoco.setStroke(dp(2), Color.WHITE);
-        brilhoFoco.setCornerRadius(dp(raio));
-        Drawable comVidro = new LayerDrawable(new Drawable[]{criarVidro(raio), brilhoFoco});
+        GradientDrawable halo = new GradientDrawable();
+        halo.setColor(Color.TRANSPARENT);
+        halo.setStroke(dp(7), Color.argb(70, 120, 175, 255));
+        halo.setCornerRadius(dp(raio));
+
+        GradientDrawable anel = new GradientDrawable();
+        anel.setColor(Color.argb(40, 255, 255, 255));
+        anel.setStroke(dp(2), AZUL);
+        anel.setCornerRadius(dp(raio));
+
+        Drawable comVidro = new LayerDrawable(new Drawable[]{criarVidro(raio), halo, anel});
         StateListDrawable estados = new StateListDrawable();
         estados.addState(new int[]{android.R.attr.state_focused}, comVidro);
         estados.addState(new int[]{}, normal);

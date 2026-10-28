@@ -5,16 +5,22 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Outline;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
@@ -22,11 +28,18 @@ import android.widget.LinearLayout;
 import android.widget.TextClock;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
 
@@ -34,8 +47,38 @@ public class MainActivity extends Activity {
     private static final int AUTO = ViewGroup.LayoutParams.WRAP_CONTENT;
     private static final int BRANCO = Color.WHITE;
 
+    // true = cartaz vertical (painel estreito); false = imagem larga (painel largo)
+    private static final boolean CARTAZ_VERTICAL = true;
+    private static final int SEGUNDOS_POR_CARTAZ = 5;
+
+    private static class Sugestao {
+        final String titulo;
+        final Bitmap imagem;
+
+        Sugestao(String titulo, Bitmap imagem) {
+            this.titulo = titulo;
+            this.imagem = imagem;
+        }
+    }
+
     private final List<ResolveInfo> apps = new ArrayList<>();
+    private final List<Sugestao> sugestoes = new ArrayList<>();
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private View primeiroFoco;
+    private ImageView imagemCartaz;
+    private TextView tituloCartaz;
+    private int indice = 0;
+
+    private final Runnable girar = new Runnable() {
+        @Override
+        public void run() {
+            if (!sugestoes.isEmpty()) {
+                indice = (indice + 1) % sugestoes.size();
+                mostrar(sugestoes.get(indice));
+            }
+            handler.postDelayed(this, SEGUNDOS_POR_CARTAZ * 1000L);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +109,23 @@ public class MainActivity extends Activity {
         if (primeiroFoco != null) {
             primeiroFoco.requestFocus();
         }
+
+        new Thread(this::carregarSugestoes).start();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        handler.removeCallbacks(girar);
+        if (!sugestoes.isEmpty()) {
+            handler.postDelayed(girar, SEGUNDOS_POR_CARTAZ * 1000L);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        handler.removeCallbacks(girar);
     }
 
     private View criarTopo() {
@@ -136,32 +196,17 @@ public class MainActivity extends Activity {
         LinearLayout banner = vertical();
         banner.setBackground(criarVidro(22));
         banner.setPadding(dp(22), dp(16), dp(22), dp(16));
-        banner.addView(texto("SUGESTÕES DE FILMES E SÉRIES", 10, Color.argb(200, 255, 255, 255)));
-        TextView chamada = texto("Em breve: sugestões do dia", 24, BRANCO);
+        banner.addView(texto("DESTAQUE", 10, Color.argb(200, 255, 255, 255)));
+        TextView chamada = texto("Em breve: vídeos do YouTube", 24, BRANCO);
         chamada.setPadding(0, dp(8), 0, dp(8));
         banner.addView(chamada);
-        banner.addView(texto("Aqui vão aparecer filmes, séries e vídeos do YouTube.",
+        banner.addView(texto("Aqui vão aparecer os vídeos em alta.",
                 13, Color.argb(220, 255, 255, 255)));
         linha1.addView(banner, lp(0, TODO, 1f));
 
-        LinearLayout sugestoes = vertical();
-        sugestoes.setBackground(criarVidro(22));
-        sugestoes.setPadding(dp(12), dp(10), dp(12), dp(10));
-        sugestoes.addView(texto("Sugestões para você", 13, BRANCO));
-        for (int r = 0; r < 2; r++) {
-            LinearLayout fila = horizontal();
-            for (int k = 0; k < 3; k++) {
-                View espaco = new View(this);
-                espaco.setBackground(cor(35, 10));
-                LinearLayout.LayoutParams pe = lp(0, TODO, 1f);
-                pe.setMargins(dp(3), dp(3), dp(3), dp(3));
-                fila.addView(espaco, pe);
-            }
-            sugestoes.addView(fila, lp(TODO, 0, 1f));
-        }
-        LinearLayout.LayoutParams paramSug = lp(dp(230), TODO);
-        paramSug.leftMargin = dp(12);
-        linha1.addView(sugestoes, paramSug);
+        LinearLayout.LayoutParams paramCartaz = lp(dp(CARTAZ_VERTICAL ? 120 : 230), TODO);
+        paramCartaz.leftMargin = dp(12);
+        linha1.addView(criarCartaz(), paramCartaz);
         conteudo.addView(linha1, lp(TODO, 0, 3f));
 
         conteudo.addView(secao("Seus aplicativos favoritos"), lp(TODO, AUTO));
@@ -169,6 +214,129 @@ public class MainActivity extends Activity {
         conteudo.addView(secao("Todos os aplicativos"), lp(TODO, AUTO));
         conteudo.addView(criarFaixaApps(false), lp(TODO, 0, 2f));
         return conteudo;
+    }
+
+    private View criarCartaz() {
+        FrameLayout cartaz = new FrameLayout(this);
+        cartaz.setBackground(criarVidro(22));
+        cartaz.setClipToOutline(true);
+        cartaz.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(22));
+            }
+        });
+
+        imagemCartaz = new ImageView(this);
+        imagemCartaz.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        cartaz.addView(imagemCartaz, new FrameLayout.LayoutParams(TODO, TODO));
+
+        LinearLayout rodape = vertical();
+        rodape.setBackground(new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00000000, 0xCC000000}));
+        rodape.setPadding(dp(10), dp(28), dp(10), dp(8));
+
+        tituloCartaz = texto("Carregando sugestões...", 12, BRANCO);
+        tituloCartaz.setMaxLines(2);
+        tituloCartaz.setEllipsize(TextUtils.TruncateAt.END);
+        rodape.addView(tituloCartaz);
+        rodape.addView(texto("Fonte: TMDB", 9, Color.argb(190, 255, 255, 255)));
+
+        cartaz.addView(rodape, new FrameLayout.LayoutParams(TODO, AUTO, Gravity.BOTTOM));
+        return cartaz;
+    }
+
+    private void mostrar(final Sugestao s) {
+        imagemCartaz.animate().alpha(0f).setDuration(250).withEndAction(() -> {
+            imagemCartaz.setImageBitmap(s.imagem);
+            tituloCartaz.setText(s.titulo);
+            imagemCartaz.animate().alpha(1f).setDuration(350).start();
+        }).start();
+    }
+
+    private void adicionar(Sugestao s) {
+        sugestoes.add(s);
+        if (sugestoes.size() == 1) {
+            indice = 0;
+            mostrar(s);
+            handler.removeCallbacks(girar);
+            handler.postDelayed(girar, SEGUNDOS_POR_CARTAZ * 1000L);
+        }
+    }
+
+    private void avisarSemSugestoes(final String mensagem) {
+        runOnUiThread(() -> {
+            if (sugestoes.isEmpty()) {
+                tituloCartaz.setText(mensagem);
+            }
+        });
+    }
+
+    private void carregarSugestoes() {
+        if (BuildConfig.TMDB_TOKEN.isEmpty()) {
+            avisarSemSugestoes("Sem chave do TMDB");
+            return;
+        }
+        try {
+            URL url = new URL("https://api.themoviedb.org/3/trending/all/week?language=pt-BR");
+            HttpURLConnection conexao = (HttpURLConnection) url.openConnection();
+            conexao.setRequestProperty("Authorization", "Bearer " + BuildConfig.TMDB_TOKEN);
+            conexao.setRequestProperty("accept", "application/json");
+            conexao.setConnectTimeout(8000);
+            conexao.setReadTimeout(8000);
+            if (conexao.getResponseCode() != 200) {
+                avisarSemSugestoes("Sem sugestões agora");
+                return;
+            }
+            JSONArray lista = new JSONObject(lerTudo(conexao.getInputStream()))
+                    .getJSONArray("results");
+
+            String campo = CARTAZ_VERTICAL ? "poster_path" : "backdrop_path";
+            int encontrados = 0;
+            for (int i = 0; i < lista.length() && encontrados < 10; i++) {
+                JSONObject o = lista.getJSONObject(i);
+                if (o.isNull(campo)) {
+                    continue;
+                }
+                String titulo = (o.has("title") && !o.isNull("title"))
+                        ? o.getString("title") : o.optString("name", "");
+                Bitmap imagem = baixarImagem(
+                        "https://image.tmdb.org/t/p/w500" + o.getString(campo));
+                if (imagem == null) {
+                    continue;
+                }
+                encontrados++;
+                final Sugestao s = new Sugestao(titulo, imagem);
+                runOnUiThread(() -> adicionar(s));
+            }
+            if (encontrados == 0) {
+                avisarSemSugestoes("Sem sugestões agora");
+            }
+        } catch (Exception e) {
+            avisarSemSugestoes("Sem sugestões agora");
+        }
+    }
+
+    private String lerTudo(InputStream entrada) throws Exception {
+        BufferedReader leitor = new BufferedReader(new InputStreamReader(entrada, "UTF-8"));
+        StringBuilder texto = new StringBuilder();
+        String linha;
+        while ((linha = leitor.readLine()) != null) {
+            texto.append(linha);
+        }
+        leitor.close();
+        return texto.toString();
+    }
+
+    private Bitmap baixarImagem(String endereco) throws Exception {
+        HttpURLConnection conexao = (HttpURLConnection) new URL(endereco).openConnection();
+        conexao.setConnectTimeout(8000);
+        conexao.setReadTimeout(8000);
+        InputStream entrada = conexao.getInputStream();
+        Bitmap imagem = BitmapFactory.decodeStream(entrada);
+        entrada.close();
+        return imagem;
     }
 
     private View criarFaixaApps(boolean favoritos) {

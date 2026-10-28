@@ -541,7 +541,7 @@ public class MainActivity extends Activity {
         coluna.addView(criarTopo(), lp(TODO, dp(40)));
 
         LinearLayout corpo = horizontal();
-        corpo.addView(criarLateral(), lp(dp(110), TODO));
+        corpo.addView(criarLateral(), lp(dp(150), TODO));
         LinearLayout.LayoutParams paramConteudo = lp(0, TODO, 1f);
         paramConteudo.leftMargin = dp(12);
         corpo.addView(criarConteudo(), paramConteudo);
@@ -631,7 +631,8 @@ public class MainActivity extends Activity {
         l.setFocusable(true);
         l.setBackground(fundoFoco(raio, cor(ativo ? 45 : 0, raio)));
         l.addView(new IconeView(this, tipo), lp(dp(18), dp(18)));
-        TextView t = texto(nome, 13, BRANCO);
+        TextView t = texto(nome, 12, BRANCO);
+        t.setMaxLines(1);
         t.setPadding(dp(8), 0, 0, 0);
         l.addView(t);
         l.setOnClickListener(v -> acao.run());
@@ -717,7 +718,7 @@ public class MainActivity extends Activity {
         conteudo.addView(linha1, lp(TODO, 0, 4f));
 
         conteudo.addView(secao("Seus aplicativos favoritos"), lp(TODO, AUTO));
-        conteudo.addView(criarFaixaFavoritos(), lp(TODO, 0, 2.2f));
+        conteudo.addView(criarFaixaFavoritos(), lp(TODO, 0, 2.4f));
         conteudo.addView(secao("Todos os aplicativos"), lp(TODO, AUTO));
         conteudo.addView(criarCategorias(), lp(TODO, 0, 1.6f));
         return conteudo;
@@ -802,7 +803,7 @@ public class MainActivity extends Activity {
         HorizontalScrollView faixa = new HorizontalScrollView(this);
         faixa.setHorizontalScrollBarEnabled(false);
         faixa.setClipToPadding(false);
-        faixa.setPadding(dp(4), dp(6), dp(4), dp(6));
+        faixa.setPadding(dp(10), dp(10), dp(10), dp(10));
 
         linhaFavoritos = horizontal();
         linhaFavoritos.setClipChildren(false);
@@ -831,15 +832,15 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "Removido dos favoritos", Toast.LENGTH_SHORT).show();
                 return true;
             });
-            LinearLayout.LayoutParams p = lp(dp(100), TODO);
-            p.rightMargin = dp(10);
+            LinearLayout.LayoutParams p = lp(dp(110), TODO);
+            p.rightMargin = dp(12);
             linhaFavoritos.addView(tile, p);
         }
         LinearLayout mais = criarTileBase();
         mais.addView(texto("+", 28, BRANCO));
-        mais.addView(texto("Adicionar", 11, BRANCO));
+        mais.addView(texto("Adicionar", 10, BRANCO));
         mais.setOnClickListener(v -> abrirTodosApps(true));
-        linhaFavoritos.addView(mais, lp(dp(100), TODO));
+        linhaFavoritos.addView(mais, lp(dp(110), TODO));
     }
 
     private View criarCategorias() {
@@ -883,7 +884,7 @@ public class MainActivity extends Activity {
         t1.setEllipsize(TextUtils.TruncateAt.END);
         textos.addView(t1);
         TextView t2 = texto(detalhe, 9, SUAVE);
-        t2.setMaxLines(1);
+        t2.setMaxLines(2);
         t2.setEllipsize(TextUtils.TruncateAt.END);
         textos.addView(t2);
         cartao.addView(textos, lp(0, AUTO, 1f));
@@ -940,7 +941,7 @@ public class MainActivity extends Activity {
         grade.setPadding(0, dp(16), 0, 0);
         grade.setClipToPadding(false);
         GradientDrawable destaque = new GradientDrawable();
-        destaque.setColor(Color.argb(60, 255, 255, 255));
+        destaque.setColor(Color.argb(50, 255, 255, 255));
         destaque.setStroke(dp(3), Color.WHITE);
         destaque.setCornerRadius(dp(18));
         grade.setSelector(destaque);
@@ -1117,7 +1118,7 @@ public class MainActivity extends Activity {
         tile.setBackground(fundoFoco(16, criarVidro(16)));
         tile.setFocusable(true);
         tile.setOnFocusChangeListener((v, tem) -> v.animate()
-                .scaleX(tem ? 1.07f : 1f).scaleY(tem ? 1.07f : 1f)
+                .scaleX(tem ? 1.06f : 1f).scaleY(tem ? 1.06f : 1f)
                 .setDuration(120).start());
         if (primeiroFoco == null) {
             primeiroFoco = tile;
@@ -1131,13 +1132,13 @@ public class MainActivity extends Activity {
 
         ImageView icone = new ImageView(this);
         icone.setImageDrawable(info.loadIcon(pm));
-        tile.addView(icone, lp(dp(52), dp(52)));
+        tile.addView(icone, lp(dp(46), dp(46)));
 
-        TextView nome = texto(info.loadLabel(pm).toString(), 11, BRANCO);
+        TextView nome = texto(info.loadLabel(pm).toString(), 10, BRANCO);
         nome.setGravity(Gravity.CENTER);
-        nome.setMaxLines(1);
+        nome.setMaxLines(2);
         nome.setEllipsize(TextUtils.TruncateAt.END);
-        nome.setPadding(0, dp(6), 0, 0);
+        nome.setPadding(0, dp(4), 0, 0);
         tile.addView(nome, lp(TODO, AUTO));
 
         tile.setOnClickListener(v -> abrir(info));
@@ -1168,17 +1169,18 @@ public class MainActivity extends Activity {
             if (convertView == null) {
                 linha = vertical();
                 linha.setGravity(Gravity.CENTER);
-                linha.setPadding(dp(8), dp(14), dp(8), dp(12));
+                linha.setPadding(dp(8), dp(12), dp(8), dp(10));
 
                 icone = new ImageView(MainActivity.this);
                 icone.setId(1);
-                linha.addView(icone, lp(dp(72), dp(72)));
+                linha.addView(icone, lp(dp(64), dp(64)));
 
-                nome = texto("", 14, BRANCO);
+                nome = texto("", 12, BRANCO);
                 nome.setId(2);
                 nome.setGravity(Gravity.CENTER);
-                nome.setMaxLines(1);
+                nome.setMaxLines(2);
                 nome.setEllipsize(TextUtils.TruncateAt.END);
+                nome.setPadding(0, dp(4), 0, 0);
                 linha.addView(nome);
             } else {
                 linha = (LinearLayout) convertView;
@@ -1240,7 +1242,7 @@ public class MainActivity extends Activity {
 
     private Drawable fundoFoco(int raio, Drawable normal) {
         GradientDrawable brilhoFoco = new GradientDrawable();
-        brilhoFoco.setColor(Color.argb(105, 255, 255, 255));
+        brilhoFoco.setColor(Color.argb(50, 255, 255, 255));
         brilhoFoco.setStroke(dp(2), Color.WHITE);
         brilhoFoco.setCornerRadius(dp(raio));
         Drawable comVidro = new LayerDrawable(new Drawable[]{criarVidro(raio), brilhoFoco});

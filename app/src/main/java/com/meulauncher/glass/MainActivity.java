@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
 
         LinearLayout painel = new LinearLayout(this);
         painel.setOrientation(LinearLayout.VERTICAL);
-        painel.setBackground(criarVidro(28, 60, 18));
+        painel.setBackground(criarVidro(28, 40, 8));
         painel.setPadding(dp(28), dp(24), dp(28), dp(8));
 
         TextView secao = new TextView(this);
@@ -124,7 +124,7 @@ public class MainActivity extends Activity {
 
     private Drawable criarVidro(int raio, int alfaTopo, int alfaBase) {
         GradientDrawable escuro = new GradientDrawable();
-        escuro.setColor(Color.argb(95, 24, 22, 26));
+        escuro.setColor(Color.argb(40, 24, 22, 26));
         escuro.setCornerRadius(dp(raio));
 
         GradientDrawable brilho = new GradientDrawable(

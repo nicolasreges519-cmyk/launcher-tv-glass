@@ -6,16 +6,20 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextClock;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.ArrayList;
@@ -33,37 +37,104 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         carregarApps();
 
-        LinearLayout raiz = new LinearLayout(this);
-        raiz.setOrientation(LinearLayout.VERTICAL);
-        raiz.setBackgroundColor(Color.rgb(30, 28, 32));
-        raiz.setPadding(dp(48), dp(32), dp(48), dp(24));
+        FrameLayout raiz = new FrameLayout(this);
+        raiz.setBackground(new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xFF1B1A1E, 0xFF5A433E, 0xFF2A2325, 0xFF161417}));
+
+        LinearLayout coluna = new LinearLayout(this);
+        coluna.setOrientation(LinearLayout.VERTICAL);
+        coluna.setPadding(dp(48), dp(28), dp(48), dp(32));
+        coluna.addView(criarCabecalho());
+
+        LinearLayout painel = new LinearLayout(this);
+        painel.setOrientation(LinearLayout.VERTICAL);
+        painel.setBackground(criarVidro(28, 60, 18));
+        painel.setPadding(dp(28), dp(24), dp(28), dp(8));
+
+        TextView secao = new TextView(this);
+        secao.setText("Todos os aplicativos");
+        secao.setTextColor(Color.WHITE);
+        secao.setTextSize(20);
+        painel.addView(secao);
+
+        GridView grade = new GridView(this);
+        grade.setNumColumns(6);
+        grade.setVerticalSpacing(dp(12));
+        grade.setHorizontalSpacing(dp(12));
+        grade.setPadding(0, dp(16), 0, 0);
+        grade.setClipToPadding(false);
+
+        GradientDrawable destaque = new GradientDrawable();
+        destaque.setColor(Color.argb(45, 255, 255, 255));
+        destaque.setStroke(dp(3), Color.WHITE);
+        destaque.setCornerRadius(dp(18));
+        grade.setSelector(destaque);
+        grade.setDrawSelectorOnTop(true);
+
+        grade.setAdapter(new AppsAdapter());
+        grade.setOnItemClickListener((pai, v, posicao, id) -> abrir(apps.get(posicao)));
+        painel.addView(grade, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        LinearLayout.LayoutParams parametrosPainel = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        parametrosPainel.topMargin = dp(24);
+        coluna.addView(painel, parametrosPainel);
+
+        raiz.addView(coluna, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(raiz);
+        grade.requestFocus();
+    }
+
+    private View criarCabecalho() {
+        LinearLayout cabecalho = new LinearLayout(this);
+        cabecalho.setOrientation(LinearLayout.HORIZONTAL);
+        cabecalho.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView titulo = new TextView(this);
         titulo.setText("Meu Launcher");
         titulo.setTextColor(Color.WHITE);
-        titulo.setTextSize(28);
-        raiz.addView(titulo);
+        titulo.setTextSize(26);
+        cabecalho.addView(titulo, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        GridView grade = new GridView(this);
-        grade.setNumColumns(6);
-        grade.setVerticalSpacing(dp(16));
-        grade.setHorizontalSpacing(dp(16));
-        grade.setPadding(0, dp(24), 0, 0);
-        grade.setClipToPadding(false);
+        LinearLayout relogio = new LinearLayout(this);
+        relogio.setOrientation(LinearLayout.VERTICAL);
+        relogio.setGravity(Gravity.END);
 
-        GradientDrawable destaque = new GradientDrawable();
-        destaque.setColor(Color.argb(70, 255, 255, 255));
-        destaque.setStroke(dp(2), Color.WHITE);
-        destaque.setCornerRadius(dp(16));
-        grade.setSelector(destaque);
+        TextClock hora = new TextClock(this);
+        hora.setFormat24Hour("HH:mm");
+        hora.setFormat12Hour("HH:mm");
+        hora.setTextColor(Color.WHITE);
+        hora.setTextSize(30);
+        relogio.addView(hora);
 
-        grade.setAdapter(new AppsAdapter());
-        grade.setOnItemClickListener((pai, v, posicao, id) -> abrir(apps.get(posicao)));
-        raiz.addView(grade, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        TextClock data = new TextClock(this);
+        data.setFormat24Hour("EEE, d MMM");
+        data.setFormat12Hour("EEE, d MMM");
+        data.setTextColor(Color.argb(200, 255, 255, 255));
+        data.setTextSize(14);
+        relogio.addView(data);
 
-        setContentView(raiz);
-        grade.requestFocus();
+        cabecalho.addView(relogio);
+        return cabecalho;
+    }
+
+    private Drawable criarVidro(int raio, int alfaTopo, int alfaBase) {
+        GradientDrawable escuro = new GradientDrawable();
+        escuro.setColor(Color.argb(95, 24, 22, 26));
+        escuro.setCornerRadius(dp(raio));
+
+        GradientDrawable brilho = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.argb(alfaTopo, 255, 255, 255),
+                        Color.argb(alfaBase, 255, 255, 255)});
+        brilho.setCornerRadius(dp(raio));
+        brilho.setStroke(dp(1), Color.argb(90, 255, 255, 255));
+
+        return new LayerDrawable(new Drawable[]{escuro, brilho});
     }
 
     private int dp(int valor) {
@@ -123,7 +194,7 @@ public class MainActivity extends Activity {
                 item = new LinearLayout(MainActivity.this);
                 item.setOrientation(LinearLayout.VERTICAL);
                 item.setGravity(Gravity.CENTER);
-                item.setPadding(dp(8), dp(16), dp(8), dp(12));
+                item.setPadding(dp(8), dp(14), dp(8), dp(12));
 
                 icone = new ImageView(MainActivity.this);
                 icone.setId(1);

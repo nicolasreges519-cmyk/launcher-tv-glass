@@ -17,6 +17,7 @@ jobs:
       - run: gradle assembleDebug --no-daemon
         env:
           TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          YOUTUBE_KEY: ${{ secrets.YOUTUBE_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug

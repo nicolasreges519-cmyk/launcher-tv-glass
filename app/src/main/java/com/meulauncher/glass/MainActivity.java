@@ -429,7 +429,6 @@ public class MainActivity extends Activity {
     // Vidro fosco: mostra o fundo borrado, névoa, brilho e borda luminosa
     private class Vidro extends Drawable {
         private final float raio;
-        private final boolean nitido;
         private final Paint pCeu = new Paint(Paint.FILTER_BITMAP_FLAG);
         private final Paint pBruma = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint pBrilho = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -438,11 +437,10 @@ public class MainActivity extends Activity {
         private final RectF area = new RectF();
         private final RectF destino = new RectF();
 
-        Vidro(int raioU, boolean nitido) {
+        Vidro(int raioU) {
             this.raio = u(raioU);
-            this.nitido = nitido;
             pBruma.setStyle(Paint.Style.FILL);
-            pBruma.setColor(Color.argb(nitido ? 10 : 34, 255, 255, 255));
+            pBruma.setColor(Color.argb(34, 255, 255, 255));
             pBrilho.setStyle(Paint.Style.FILL);
             pBorda.setStyle(Paint.Style.STROKE);
             pBorda.setStrokeWidth(Math.max(2f, u(3)));
@@ -477,7 +475,7 @@ public class MainActivity extends Activity {
             c.save();
             c.clipPath(forma);
             View dono = encontrarDono();
-            if (EFEITO_FOSCO && dono != null) {
+            if (EFEITO_FOSCO && dono != null && fundoDesfocado != null) {
                 View janela = dono.getRootView();
                 int[] a = new int[2];
                 int[] j = new int[2];
@@ -485,13 +483,8 @@ public class MainActivity extends Activity {
                 janela.getLocationInWindow(j);
                 c.save();
                 c.translate(j[0] - a[0], j[1] - a[1]);
-                if (nitido) {
-                    cenarioNitido.setBounds(0, 0, janela.getWidth(), janela.getHeight());
-                    cenarioNitido.draw(c);
-                } else if (fundoDesfocado != null) {
-                    destino.set(0, 0, janela.getWidth(), janela.getHeight());
-                    c.drawBitmap(fundoDesfocado, null, destino, pCeu);
-                }
+                destino.set(0, 0, janela.getWidth(), janela.getHeight());
+                c.drawBitmap(fundoDesfocado, null, destino, pCeu);
                 c.restore();
             }
             c.drawRect(area, pBruma);
@@ -517,12 +510,10 @@ public class MainActivity extends Activity {
     private final List<ResolveInfo> apps = new ArrayList<>();
     private final List<String> favoritos = new ArrayList<>();
     private final List<Sugestao> sugestoes = new ArrayList<>();
-    private final ImageView[] cartazes = new ImageView[6];
     private final Handler handler = new Handler(Looper.getMainLooper());
     private float escala = 1f;
     private SharedPreferences prefs;
     private Bitmap foto;
-    private Drawable cenarioNitido;
     private Bitmap fundoDesfocado;
     private FrameLayout raiz;
     private FrameLayout tela;
@@ -530,13 +521,12 @@ public class MainActivity extends Activity {
     private FrameLayout overlay;
     private boolean modoFavoritos = false;
     private View primeiroFoco;
-    private ImageView imagemBanner;
-    private TextView rotuloTipo;
-    private TextView tituloBanner;
-    private TextView sinopseBanner;
+    private ImageView imagemCartaz;
+    private TextView tituloSug;
+    private TextView detalheSug;
+    private TextView sinopseSug;
     private TextView rotuloBotao;
     private Sugestao atual;
-    private int cartazesUsados = 0;
     private int indice = 0;
 
     private final Runnable girar = new Runnable() {
@@ -565,7 +555,6 @@ public class MainActivity extends Activity {
         carregarFavoritos();
 
         foto = carregarFoto();
-        cenarioNitido = fundoTela();
         fundoDesfocado = criarFundoDesfocado();
 
         raiz = new FrameLayout(this);
@@ -579,8 +568,7 @@ public class MainActivity extends Activity {
         colocar(criarMenuTopo(), 360, 56, 1061, 66);
         colocar(criarRelogio(), 1520, 50, 346, 78);
         colocar(criarLateral(), 54, 172, 235, 766);
-        colocar(criarBanner(), 312, 172, 1104, 358);
-        colocar(criarPainelSugestoes(), 1440, 172, 426, 358);
+        colocar(criarPainelSugestoes(), 1010, 172, 856, 358);
         colocar(secao("Seus aplicativos favoritos"), 312, 546, 900, 40);
         colocar(criarFaixaFavoritos(), 302, 588, 1574, 164);
         colocar(secao("Todos os aplicativos"), 312, 764, 900, 40);
@@ -767,64 +755,71 @@ public class MainActivity extends Activity {
         return lateral;
     }
 
-    // ---------- Banner de sugestões ----------
+    // ---------- Painel do canto: cartaz dinâmico + descrição ----------
 
-    private View criarBanner() {
-        FrameLayout banner = new FrameLayout(this);
-        banner.setBackground(criarVidro(34, true));
-        arredondar(banner, 34);
+    private View criarPainelSugestoes() {
+        LinearLayout painel = vertical();
+        painel.setBackground(criarVidro(34));
+        painel.setPadding(u(26), u(20), u(26), u(24));
 
-        imagemBanner = new ImageView(this);
-        imagemBanner.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        FrameLayout.LayoutParams pImagem = new FrameLayout.LayoutParams(TODO, TODO);
-        pImagem.setMargins(u(3), u(3), u(3), u(3));
-        banner.addView(imagemBanner, pImagem);
+        LinearLayout cabecalho = horizontal();
+        cabecalho.setGravity(Gravity.CENTER_VERTICAL);
+        cabecalho.addView(texto("Sugestões para você", 28, BRANCO), lp(0, AUTO, 1f));
+        cabecalho.addView(new IconeView(this, I_SETA), lp(u(26), u(26)));
+        painel.addView(cabecalho, lp(TODO, u(40)));
 
-        View escurecer = new View(this);
-        escurecer.setBackground(new GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0xE6000000, 0x99000000, 0x00000000}));
-        FrameLayout.LayoutParams pEscurecer = new FrameLayout.LayoutParams(TODO, TODO);
-        pEscurecer.setMargins(u(3), u(3), u(3), u(3));
-        banner.addView(escurecer, pEscurecer);
+        LinearLayout corpo = horizontal();
+
+        FrameLayout moldura = new FrameLayout(this);
+        moldura.setBackground(cor(25, 18));
+        arredondar(moldura, 18);
+        imagemCartaz = new ImageView(this);
+        imagemCartaz.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        moldura.addView(imagemCartaz, new FrameLayout.LayoutParams(TODO, TODO));
+        corpo.addView(moldura, lp(u(172), TODO));
 
         LinearLayout textos = vertical();
-        textos.setPadding(u(46), u(30), u(30), u(24));
+        textos.setPadding(u(28), 0, 0, 0);
 
-        rotuloTipo = texto("SUGESTÕES DE FILMES E SÉRIES", 20, SUAVE);
-        textos.addView(rotuloTipo);
+        tituloSug = texto("Carregando sugestões...", 32, BRANCO);
+        tituloSug.setTypeface(null, Typeface.BOLD);
+        tituloSug.setMaxLines(2);
+        tituloSug.setEllipsize(TextUtils.TruncateAt.END);
+        textos.addView(tituloSug);
 
-        tituloBanner = texto("Carregando sugestões...", 54, BRANCO);
-        tituloBanner.setTypeface(null, Typeface.BOLD);
-        tituloBanner.setMaxLines(2);
-        tituloBanner.setEllipsize(TextUtils.TruncateAt.END);
-        tituloBanner.setPadding(0, u(8), 0, u(8));
-        textos.addView(tituloBanner);
+        detalheSug = texto("", 18, SUAVE);
+        detalheSug.setPadding(0, u(4), 0, 0);
+        textos.addView(detalheSug);
 
-        sinopseBanner = texto("", 22, SUAVE);
-        sinopseBanner.setMaxLines(2);
-        sinopseBanner.setEllipsize(TextUtils.TruncateAt.END);
-        textos.addView(sinopseBanner);
+        sinopseSug = texto("", 20, SUAVE);
+        sinopseSug.setMaxLines(3);
+        sinopseSug.setEllipsize(TextUtils.TruncateAt.END);
+        sinopseSug.setPadding(0, u(10), 0, 0);
+        textos.addView(sinopseSug);
+
+        textos.addView(new View(this), lp(TODO, 0, 1f));
 
         LinearLayout botao = horizontal();
         botao.setGravity(Gravity.CENTER_VERTICAL);
-        botao.setPadding(u(32), 0, u(36), 0);
+        botao.setPadding(u(28), 0, u(32), 0);
         botao.setFocusable(true);
-        botao.setBackground(fundoFoco(28, criarVidro(28)));
-        botao.addView(new IconeView(this, I_PLAY), lp(u(28), u(28)));
-        rotuloBotao = texto("Ver mais", 26, BRANCO);
-        rotuloBotao.setPadding(u(14), 0, 0, 0);
+        botao.setBackground(fundoFoco(26, criarVidro(26)));
+        botao.addView(new IconeView(this, I_PLAY), lp(u(26), u(26)));
+        rotuloBotao = texto("Ver mais", 24, BRANCO);
+        rotuloBotao.setPadding(u(12), 0, 0, 0);
         botao.addView(rotuloBotao);
-        botao.setOnClickListener(v -> acaoDoBanner());
-        LinearLayout.LayoutParams pb = lp(AUTO, u(56));
-        pb.topMargin = u(18);
-        textos.addView(botao, pb);
+        botao.setOnClickListener(v -> acaoDoBotao());
+        textos.addView(botao, lp(AUTO, u(52)));
 
-        banner.addView(textos, new FrameLayout.LayoutParams(u(700), TODO));
-        return banner;
+        corpo.addView(textos, lp(0, TODO, 1f));
+
+        LinearLayout.LayoutParams pc = lp(TODO, 0, 1f);
+        pc.topMargin = u(12);
+        painel.addView(corpo, pc);
+        return painel;
     }
 
-    private void acaoDoBanner() {
+    private void acaoDoBotao() {
         if (atual == null) {
             return;
         }
@@ -898,38 +893,6 @@ public class MainActivity extends Activity {
         raiz.addView(overlay, new FrameLayout.LayoutParams(TODO, TODO));
         tela.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         fechar.requestFocus();
-    }
-
-    // ---------- Painel "Sugestões para você" ----------
-
-    private View criarPainelSugestoes() {
-        LinearLayout painel = vertical();
-        painel.setBackground(criarVidro(34));
-        painel.setPadding(u(20), u(18), u(20), u(20));
-
-        LinearLayout cabecalho = horizontal();
-        cabecalho.setGravity(Gravity.CENTER_VERTICAL);
-        cabecalho.addView(texto("Sugestões para você", 28, BRANCO), lp(0, AUTO, 1f));
-        cabecalho.addView(new IconeView(this, I_SETA), lp(u(26), u(26)));
-        painel.addView(cabecalho, lp(TODO, u(40)));
-
-        for (int linha = 0; linha < 2; linha++) {
-            LinearLayout fila = horizontal();
-            for (int col = 0; col < 3; col++) {
-                ImageView cartaz = new ImageView(this);
-                cartaz.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                cartaz.setBackground(cor(25, 14));
-                arredondar(cartaz, 14);
-                cartazes[linha * 3 + col] = cartaz;
-                LinearLayout.LayoutParams p = lp(0, TODO, 1f);
-                p.setMargins(u(4), 0, u(4), 0);
-                fila.addView(cartaz, p);
-            }
-            LinearLayout.LayoutParams pf = lp(TODO, 0, 1f);
-            pf.topMargin = u(10);
-            painel.addView(fila, pf);
-        }
-        return painel;
     }
 
     // ---------- Favoritos ----------
@@ -1279,23 +1242,18 @@ public class MainActivity extends Activity {
 
     private void mostrar(final Sugestao s) {
         atual = s;
-        imagemBanner.animate().alpha(0f).setDuration(250).withEndAction(() -> {
-            imagemBanner.setImageBitmap(s.fundo);
-            rotuloTipo.setText(s.videoId != null
-                    ? "VÍDEOS EM ALTA NO YOUTUBE" : "SUGESTÕES DE FILMES E SÉRIES");
-            tituloBanner.setText(s.titulo);
-            sinopseBanner.setText(s.sinopse);
+        imagemCartaz.animate().alpha(0f).setDuration(250).withEndAction(() -> {
+            imagemCartaz.setImageBitmap(s.cartaz != null ? s.cartaz : s.fundo);
+            tituloSug.setText(s.titulo);
+            detalheSug.setText(s.detalhe);
+            sinopseSug.setText(s.sinopse);
             rotuloBotao.setText(s.videoId != null ? "Assistir" : "Ver mais");
-            imagemBanner.animate().alpha(1f).setDuration(350).start();
+            imagemCartaz.animate().alpha(1f).setDuration(350).start();
         }).start();
     }
 
     private void adicionar(Sugestao s) {
         sugestoes.add(s);
-        if (s.cartaz != null && cartazesUsados < cartazes.length) {
-            cartazes[cartazesUsados].setImageBitmap(s.cartaz);
-            cartazesUsados++;
-        }
         if (sugestoes.size() == 1) {
             indice = 0;
             mostrar(s);
@@ -1307,7 +1265,7 @@ public class MainActivity extends Activity {
     private void avisarSemSugestoes(final String mensagem) {
         runOnUiThread(() -> {
             if (sugestoes.isEmpty()) {
-                tituloBanner.setText(mensagem);
+                tituloSug.setText(mensagem);
             }
         });
     }
@@ -1524,11 +1482,7 @@ public class MainActivity extends Activity {
     }
 
     private Drawable criarVidro(int raioU) {
-        return new Vidro(raioU, false);
-    }
-
-    private Drawable criarVidro(int raioU, boolean nitido) {
-        return new Vidro(raioU, nitido);
+        return new Vidro(raioU);
     }
 
     private void avisar(String nome) {

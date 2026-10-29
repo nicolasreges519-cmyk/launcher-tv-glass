@@ -31,6 +31,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -64,7 +66,7 @@ public class MainActivity extends Activity {
     private static final int TODO = ViewGroup.LayoutParams.MATCH_PARENT;
     private static final int AUTO = ViewGroup.LayoutParams.WRAP_CONTENT;
     private static final int BRANCO = Color.WHITE;
-    private static final int SUAVE = Color.argb(210, 255, 255, 255);
+    private static final int SUAVE = Color.argb(215, 255, 255, 255);
     private static final int AZUL = Color.rgb(150, 195, 255);
 
     // true = vidro fosco com fundo borrado; false = vidro simples (mais leve)
@@ -112,7 +114,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Foto de fundo: preenche a área cortando o excesso (como "centralizar e cortar")
+    // Foto de fundo: preenche a área cortando o excesso
     private static class FundoFoto extends Drawable {
         private final Bitmap foto;
         private final Paint tinta = new Paint(Paint.FILTER_BITMAP_FLAG);
@@ -436,20 +438,20 @@ public class MainActivity extends Activity {
         private final RectF area = new RectF();
         private final RectF destino = new RectF();
 
-        Vidro(int raioDp, boolean nitido) {
-            this.raio = dp(raioDp);
+        Vidro(int raioU, boolean nitido) {
+            this.raio = u(raioU);
             this.nitido = nitido;
             pBruma.setStyle(Paint.Style.FILL);
             pBruma.setColor(Color.argb(nitido ? 10 : 34, 255, 255, 255));
             pBrilho.setStyle(Paint.Style.FILL);
             pBorda.setStyle(Paint.Style.STROKE);
-            pBorda.setStrokeWidth(dp(1) * 1.5f);
+            pBorda.setStrokeWidth(Math.max(2f, u(3)));
         }
 
         @Override
         protected void onBoundsChange(Rect b) {
             area.set(b);
-            area.inset(dp(1), dp(1));
+            area.inset(u(2), u(2));
             forma.reset();
             forma.addRoundRect(area, raio, raio, Path.Direction.CW);
             pBrilho.setShader(new LinearGradient(area.left, area.top, area.right, area.bottom,
@@ -517,12 +519,13 @@ public class MainActivity extends Activity {
     private final List<Sugestao> sugestoes = new ArrayList<>();
     private final ImageView[] cartazes = new ImageView[6];
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private float escala = 1f;
     private SharedPreferences prefs;
     private Bitmap foto;
     private Drawable cenarioNitido;
     private Bitmap fundoDesfocado;
     private FrameLayout raiz;
-    private LinearLayout coluna;
+    private FrameLayout tela;
     private LinearLayout linhaFavoritos;
     private FrameLayout overlay;
     private boolean modoFavoritos = false;
@@ -547,9 +550,17 @@ public class MainActivity extends Activity {
         }
     };
 
+    // Converte uma medida do quadro de design (1920 x 1080) para pixels da TV
+    private int u(float valor) {
+        return Math.round(valor * escala);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        DisplayMetrics m = getResources().getDisplayMetrics();
+        escala = Math.min(m.widthPixels / 1920f, m.heightPixels / 1080f);
+
         carregarApps();
         carregarFavoritos();
 
@@ -560,24 +571,22 @@ public class MainActivity extends Activity {
         raiz = new FrameLayout(this);
         raiz.setBackground(fundoTela());
 
-        coluna = vertical();
-        coluna.setPadding(dp(28), dp(14), dp(28), dp(12));
-        coluna.addView(criarTopo(), lp(TODO, dp(40)));
+        tela = new FrameLayout(this);
+        tela.setClipChildren(false);
+        raiz.addView(tela, new FrameLayout.LayoutParams(u(1920), u(1080), Gravity.CENTER));
 
-        LinearLayout corpo = horizontal();
-        corpo.addView(criarLateral(), lp(dp(150), TODO));
-        LinearLayout.LayoutParams paramConteudo = lp(0, TODO, 1f);
-        paramConteudo.leftMargin = dp(12);
-        corpo.addView(criarConteudo(), paramConteudo);
-        LinearLayout.LayoutParams paramCorpo = lp(TODO, 0, 1f);
-        paramCorpo.topMargin = dp(10);
-        coluna.addView(corpo, paramCorpo);
+        colocar(criarMarca(), 66, 56, 290, 66);
+        colocar(criarMenuTopo(), 360, 56, 1061, 66);
+        colocar(criarRelogio(), 1520, 50, 346, 78);
+        colocar(criarLateral(), 54, 172, 235, 766);
+        colocar(criarBanner(), 312, 172, 1104, 358);
+        colocar(criarPainelSugestoes(), 1440, 172, 426, 358);
+        colocar(secao("Seus aplicativos favoritos"), 312, 546, 900, 40);
+        colocar(criarFaixaFavoritos(), 302, 588, 1574, 164);
+        colocar(secao("Todos os aplicativos"), 312, 764, 900, 40);
+        colocar(criarCategorias(), 312, 808, 1554, 124);
+        colocar(criarRodape(), 54, 972, 1812, 58);
 
-        LinearLayout.LayoutParams paramRodape = lp(TODO, dp(34));
-        paramRodape.topMargin = dp(8);
-        coluna.addView(criarRodape(), paramRodape);
-
-        raiz.addView(coluna, new FrameLayout.LayoutParams(TODO, TODO));
         setContentView(raiz);
         if (primeiroFoco != null) {
             primeiroFoco.requestFocus();
@@ -608,6 +617,14 @@ public class MainActivity extends Activity {
         } else {
             super.onBackPressed();
         }
+    }
+
+    // Coloca uma peça numa posição do quadro de design
+    private void colocar(View v, int x, int y, int w, int h) {
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(u(w), u(h));
+        p.leftMargin = u(x);
+        p.topMargin = u(y);
+        tela.addView(v, p);
     }
 
     private Bitmap carregarFoto() {
@@ -647,127 +664,120 @@ public class MainActivity extends Activity {
         return Bitmap.createScaledBitmap(medio, 48, 27, true);
     }
 
-    private void arredondar(View v, final int raioDp) {
+    private void arredondar(View v, final int raioU) {
         v.setClipToOutline(true);
         v.setOutlineProvider(new ViewOutlineProvider() {
             @Override
             public void getOutline(View view, Outline outline) {
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(raioDp));
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), u(raioU));
             }
         });
     }
 
+    // ---------- Barra superior ----------
+
+    private View criarMarca() {
+        LinearLayout marca = horizontal();
+        marca.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tcl = texto("TCL", 44, BRANCO);
+        tcl.setTypeface(null, Typeface.BOLD);
+        marca.addView(tcl);
+        TextView googleTv = texto("Google TV", 40, BRANCO);
+        googleTv.setPadding(u(10), 0, 0, 0);
+        marca.addView(googleTv);
+        return marca;
+    }
+
     private LinearLayout item(int tipo, String nome, boolean ativo, int raio,
-                              int padH, final Runnable acao) {
+                              float textoPx, float iconePx, boolean centro, final Runnable acao) {
         LinearLayout l = horizontal();
-        l.setGravity(Gravity.CENTER_VERTICAL);
-        l.setPadding(dp(padH), dp(7), dp(padH), dp(7));
+        l.setGravity(centro ? Gravity.CENTER : (Gravity.CENTER_VERTICAL | Gravity.START));
+        l.setPadding(u(22), 0, u(14), 0);
         l.setFocusable(true);
-        l.setBackground(fundoFoco(raio, cor(ativo ? 45 : 0, raio)));
-        l.addView(new IconeView(this, tipo), lp(dp(18), dp(18)));
-        TextView t = texto(nome, 12, BRANCO);
+        l.setBackground(fundoFoco(raio, cor(ativo ? 48 : 0, raio)));
+        l.addView(new IconeView(this, tipo), lp(u(iconePx), u(iconePx)));
+        TextView t = texto(nome, textoPx, BRANCO);
         t.setMaxLines(1);
-        t.setPadding(dp(8), 0, 0, 0);
+        t.setPadding(u(14), 0, 0, 0);
         l.addView(t);
         l.setOnClickListener(v -> acao.run());
         return l;
     }
 
-    private View criarTopo() {
-        LinearLayout topo = horizontal();
-        topo.setGravity(Gravity.CENTER_VERTICAL);
-
-        LinearLayout marca = horizontal();
-        marca.setGravity(Gravity.CENTER_VERTICAL);
-        TextView tcl = texto("TCL", 22, BRANCO);
-        tcl.setTypeface(null, Typeface.BOLD);
-        marca.addView(tcl);
-        TextView googleTv = texto("Google TV", 20, BRANCO);
-        googleTv.setPadding(dp(6), 0, 0, 0);
-        marca.addView(googleTv);
-        topo.addView(marca, lp(0, AUTO, 1f));
-
+    private View criarMenuTopo() {
         LinearLayout menu = horizontal();
         menu.setGravity(Gravity.CENTER_VERTICAL);
-        menu.setBackground(criarVidro(20));
-        menu.setPadding(dp(6), dp(3), dp(6), dp(3));
-        menu.addView(item(I_HOME, "Início", true, 16, 12, () -> avisar("Início")));
-        menu.addView(item(I_GRADE, "Aplicativos", false, 16, 12, () -> abrirTodosApps(false)));
-        menu.addView(item(I_PLAY, "Filmes e Séries", false, 16, 12, () -> avisar("Filmes e Séries")));
-        menu.addView(item(I_NOTA, "Música", false, 16, 12, () -> avisar("Música")));
-        menu.addView(item(I_ENGRENAGEM, "Configurações", false, 16, 12, () -> avisar("Configurações")));
-        topo.addView(menu, lp(AUTO, TODO));
+        menu.setBackground(criarVidro(33));
+        menu.setPadding(u(10), u(8), u(10), u(8));
+        menu.addView(item(I_HOME, "Início", true, 26, 24, 32, true,
+                () -> avisar("Início")), lp(0, TODO, 1f));
+        menu.addView(item(I_GRADE, "Aplicativos", false, 26, 24, 32, true,
+                () -> abrirTodosApps(false)), lp(0, TODO, 1f));
+        menu.addView(item(I_PLAY, "Filmes e Séries", false, 26, 24, 32, true,
+                () -> avisar("Filmes e Séries")), lp(0, TODO, 1f));
+        menu.addView(item(I_NOTA, "Música", false, 26, 24, 32, true,
+                () -> avisar("Música")), lp(0, TODO, 1f));
+        menu.addView(item(I_ENGRENAGEM, "Configurações", false, 26, 24, 32, true,
+                () -> avisar("Configurações")), lp(0, TODO, 1f));
+        return menu;
+    }
 
+    private View criarRelogio() {
         LinearLayout direita = horizontal();
         direita.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-        direita.addView(new IconeView(this, I_WIFI), lp(dp(18), dp(18)));
+        direita.addView(new IconeView(this, I_WIFI), lp(u(40), u(40)));
 
         LinearLayout relogio = vertical();
         relogio.setGravity(Gravity.END);
-        relogio.setPadding(dp(12), 0, 0, 0);
+        relogio.setPadding(u(22), 0, 0, 0);
         TextClock hora = new TextClock(this);
         hora.setFormat24Hour("HH:mm");
         hora.setFormat12Hour("HH:mm");
         hora.setTextColor(BRANCO);
-        hora.setTextSize(20);
+        hora.setTextSize(TypedValue.COMPLEX_UNIT_PX, u(44));
         relogio.addView(hora);
         TextClock data = new TextClock(this);
-        data.setFormat24Hour("EEE, d MMM");
-        data.setFormat12Hour("EEE, d MMM");
+        data.setFormat24Hour("EEE, d 'de' MMM");
+        data.setFormat12Hour("EEE, d 'de' MMM");
         data.setTextColor(SUAVE);
-        data.setTextSize(10);
+        data.setTextSize(TypedValue.COMPLEX_UNIT_PX, u(22));
         relogio.addView(data);
         direita.addView(relogio);
-        topo.addView(direita, lp(0, TODO, 1f));
-        return topo;
+        return direita;
     }
+
+    // ---------- Menu lateral ----------
 
     private View criarLateral() {
         LinearLayout lateral = vertical();
-        lateral.setBackground(criarVidro(22));
-        lateral.setPadding(dp(8), dp(10), dp(8), dp(10));
+        lateral.setBackground(criarVidro(34));
+        lateral.setPadding(u(16), u(34), u(16), u(20));
         View[] itens = {
-                item(I_HOME, "Início", true, 14, 10, () -> avisar("Início")),
-                item(I_GRADE, "Meus Apps", false, 14, 10, () -> abrirTodosApps(false)),
-                item(I_ESTRELA, "Favoritos", false, 14, 10, () -> abrirTodosApps(true)),
-                item(I_BUSCA, "Pesquisar", false, 14, 10, () -> avisar("Pesquisar")),
-                item(I_ENGRENAGEM, "Configurações", false, 14, 10, () -> avisar("Configurações"))
+                item(I_HOME, "Início", true, 26, 26, 38, false, () -> avisar("Início")),
+                item(I_GRADE, "Meus Apps", false, 26, 26, 38, false, () -> abrirTodosApps(false)),
+                item(I_ESTRELA, "Favoritos", false, 26, 26, 38, false, () -> abrirTodosApps(true)),
+                item(I_BUSCA, "Pesquisar", false, 26, 26, 38, false, () -> avisar("Pesquisar")),
+                item(I_ENGRENAGEM, "Configurações", false, 26, 26, 38, false, () -> avisar("Configurações"))
         };
         for (View v : itens) {
-            LinearLayout.LayoutParams p = lp(TODO, dp(40));
-            p.bottomMargin = dp(6);
+            LinearLayout.LayoutParams p = lp(TODO, u(64));
+            p.bottomMargin = u(9);
             lateral.addView(v, p);
         }
         return lateral;
     }
 
-    private View criarConteudo() {
-        LinearLayout conteudo = vertical();
+    // ---------- Banner de sugestões ----------
 
-        LinearLayout linha1 = horizontal();
-        linha1.addView(criarBanner(), lp(0, TODO, 1f));
-        LinearLayout.LayoutParams paramSug = lp(dp(220), TODO);
-        paramSug.leftMargin = dp(12);
-        linha1.addView(criarPainelSugestoes(), paramSug);
-        conteudo.addView(linha1, lp(TODO, 0, 4.5f));
-
-        conteudo.addView(secao("Seus aplicativos favoritos"), lp(TODO, AUTO));
-        conteudo.addView(criarFaixaFavoritos(), lp(TODO, 0, 2.5f));
-        conteudo.addView(secao("Todos os aplicativos"), lp(TODO, AUTO));
-        conteudo.addView(criarCategorias(), lp(TODO, 0, 1.5f));
-        return conteudo;
-    }
-
-    // Banner grande: sugestões de filmes, séries e vídeos, um por vez
     private View criarBanner() {
         FrameLayout banner = new FrameLayout(this);
-        banner.setBackground(criarVidro(22, true));
-        arredondar(banner, 22);
+        banner.setBackground(criarVidro(34, true));
+        arredondar(banner, 34);
 
         imagemBanner = new ImageView(this);
         imagemBanner.setScaleType(ImageView.ScaleType.CENTER_CROP);
         FrameLayout.LayoutParams pImagem = new FrameLayout.LayoutParams(TODO, TODO);
-        pImagem.setMargins(dp(2), dp(2), dp(2), dp(2));
+        pImagem.setMargins(u(3), u(3), u(3), u(3));
         banner.addView(imagemBanner, pImagem);
 
         View escurecer = new View(this);
@@ -775,42 +785,42 @@ public class MainActivity extends Activity {
                 GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{0xE6000000, 0x99000000, 0x00000000}));
         FrameLayout.LayoutParams pEscurecer = new FrameLayout.LayoutParams(TODO, TODO);
-        pEscurecer.setMargins(dp(2), dp(2), dp(2), dp(2));
+        pEscurecer.setMargins(u(3), u(3), u(3), u(3));
         banner.addView(escurecer, pEscurecer);
 
         LinearLayout textos = vertical();
-        textos.setPadding(dp(22), dp(16), dp(22), dp(14));
+        textos.setPadding(u(46), u(30), u(30), u(24));
 
-        rotuloTipo = texto("SUGESTÕES DE FILMES E SÉRIES", 9, SUAVE);
+        rotuloTipo = texto("SUGESTÕES DE FILMES E SÉRIES", 20, SUAVE);
         textos.addView(rotuloTipo);
 
-        tituloBanner = texto("Carregando sugestões...", 24, BRANCO);
+        tituloBanner = texto("Carregando sugestões...", 54, BRANCO);
         tituloBanner.setTypeface(null, Typeface.BOLD);
         tituloBanner.setMaxLines(2);
         tituloBanner.setEllipsize(TextUtils.TruncateAt.END);
-        tituloBanner.setPadding(0, dp(6), 0, dp(6));
+        tituloBanner.setPadding(0, u(8), 0, u(8));
         textos.addView(tituloBanner);
 
-        sinopseBanner = texto("", 11, SUAVE);
-        sinopseBanner.setMaxLines(3);
+        sinopseBanner = texto("", 22, SUAVE);
+        sinopseBanner.setMaxLines(2);
         sinopseBanner.setEllipsize(TextUtils.TruncateAt.END);
         textos.addView(sinopseBanner);
 
         LinearLayout botao = horizontal();
         botao.setGravity(Gravity.CENTER_VERTICAL);
-        botao.setPadding(dp(16), dp(7), dp(18), dp(7));
+        botao.setPadding(u(32), 0, u(36), 0);
         botao.setFocusable(true);
-        botao.setBackground(fundoFoco(18, criarVidro(18)));
-        botao.addView(new IconeView(this, I_PLAY), lp(dp(16), dp(16)));
-        rotuloBotao = texto("Ver mais", 13, BRANCO);
-        rotuloBotao.setPadding(dp(8), 0, 0, 0);
+        botao.setBackground(fundoFoco(28, criarVidro(28)));
+        botao.addView(new IconeView(this, I_PLAY), lp(u(28), u(28)));
+        rotuloBotao = texto("Ver mais", 26, BRANCO);
+        rotuloBotao.setPadding(u(14), 0, 0, 0);
         botao.addView(rotuloBotao);
         botao.setOnClickListener(v -> acaoDoBanner());
-        LinearLayout.LayoutParams pb = lp(AUTO, AUTO);
-        pb.topMargin = dp(12);
+        LinearLayout.LayoutParams pb = lp(AUTO, u(56));
+        pb.topMargin = u(18);
         textos.addView(botao, pb);
 
-        banner.addView(textos, new FrameLayout.LayoutParams(dp(320), TODO));
+        banner.addView(textos, new FrameLayout.LayoutParams(u(700), TODO));
         return banner;
     }
 
@@ -857,77 +867,78 @@ public class MainActivity extends Activity {
         overlay.addView(escurecer, new FrameLayout.LayoutParams(TODO, TODO));
 
         LinearLayout textos = vertical();
-        textos.setPadding(dp(48), dp(40), dp(48), dp(32));
-        textos.addView(texto(s.tipo.toUpperCase(Locale.ROOT), 11, SUAVE));
+        textos.setPadding(u(110), u(120), u(60), u(80));
+        textos.addView(texto(s.tipo.toUpperCase(Locale.ROOT), 22, SUAVE));
 
-        TextView titulo = texto(s.titulo, 30, BRANCO);
+        TextView titulo = texto(s.titulo, 64, BRANCO);
         titulo.setTypeface(null, Typeface.BOLD);
         titulo.setMaxLines(3);
         titulo.setEllipsize(TextUtils.TruncateAt.END);
-        titulo.setPadding(0, dp(8), 0, dp(6));
+        titulo.setPadding(0, u(14), 0, u(10));
         textos.addView(titulo);
 
-        textos.addView(texto(s.detalhe, 13, SUAVE));
+        textos.addView(texto(s.detalhe, 26, SUAVE));
 
-        TextView sinopse = texto(s.sinopse, 14, BRANCO);
+        TextView sinopse = texto(s.sinopse, 28, BRANCO);
         sinopse.setMaxLines(9);
         sinopse.setEllipsize(TextUtils.TruncateAt.END);
-        sinopse.setPadding(0, dp(14), 0, dp(18));
+        sinopse.setPadding(0, u(26), 0, u(34));
         textos.addView(sinopse);
 
         LinearLayout fechar = horizontal();
-        fechar.setGravity(Gravity.CENTER_VERTICAL);
-        fechar.setPadding(dp(22), dp(8), dp(22), dp(8));
+        fechar.setGravity(Gravity.CENTER);
+        fechar.setPadding(u(46), 0, u(46), 0);
         fechar.setFocusable(true);
-        fechar.setBackground(fundoFoco(18, criarVidro(18)));
-        fechar.addView(texto("Fechar", 13, BRANCO));
+        fechar.setBackground(fundoFoco(34, criarVidro(34)));
+        fechar.addView(texto("Fechar", 28, BRANCO));
         fechar.setOnClickListener(v -> fecharTodosApps());
-        textos.addView(fechar, lp(AUTO, AUTO));
+        textos.addView(fechar, lp(AUTO, u(68)));
 
-        overlay.addView(textos, new FrameLayout.LayoutParams(dp(420), TODO));
+        overlay.addView(textos, new FrameLayout.LayoutParams(u(1000), TODO));
         raiz.addView(overlay, new FrameLayout.LayoutParams(TODO, TODO));
-        coluna.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        tela.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         fechar.requestFocus();
     }
 
-    // Painel da direita: grade com 6 cartazes
+    // ---------- Painel "Sugestões para você" ----------
+
     private View criarPainelSugestoes() {
         LinearLayout painel = vertical();
-        painel.setBackground(criarVidro(22));
-        painel.setPadding(dp(10), dp(10), dp(10), dp(10));
+        painel.setBackground(criarVidro(34));
+        painel.setPadding(u(20), u(18), u(20), u(20));
 
         LinearLayout cabecalho = horizontal();
         cabecalho.setGravity(Gravity.CENTER_VERTICAL);
-        cabecalho.addView(texto("Sugestões para você", 12, BRANCO), lp(0, AUTO, 1f));
-        cabecalho.addView(new IconeView(this, I_SETA), lp(dp(14), dp(14)));
-        painel.addView(cabecalho, lp(TODO, AUTO));
+        cabecalho.addView(texto("Sugestões para você", 28, BRANCO), lp(0, AUTO, 1f));
+        cabecalho.addView(new IconeView(this, I_SETA), lp(u(26), u(26)));
+        painel.addView(cabecalho, lp(TODO, u(40)));
 
         for (int linha = 0; linha < 2; linha++) {
             LinearLayout fila = horizontal();
             for (int col = 0; col < 3; col++) {
                 ImageView cartaz = new ImageView(this);
                 cartaz.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                cartaz.setBackground(cor(25, 10));
-                arredondar(cartaz, 10);
+                cartaz.setBackground(cor(25, 14));
+                arredondar(cartaz, 14);
                 cartazes[linha * 3 + col] = cartaz;
                 LinearLayout.LayoutParams p = lp(0, TODO, 1f);
-                p.setMargins(dp(3), dp(3), dp(3), dp(3));
+                p.setMargins(u(4), 0, u(4), 0);
                 fila.addView(cartaz, p);
             }
             LinearLayout.LayoutParams pf = lp(TODO, 0, 1f);
-            if (linha == 0) {
-                pf.topMargin = dp(6);
-            }
+            pf.topMargin = u(10);
             painel.addView(fila, pf);
         }
         return painel;
     }
 
+    // ---------- Favoritos ----------
+
     private View criarFaixaFavoritos() {
         HorizontalScrollView faixa = new HorizontalScrollView(this);
         faixa.setHorizontalScrollBarEnabled(false);
         faixa.setClipToPadding(false);
-        faixa.setPadding(dp(10), dp(10), dp(10), dp(10));
+        faixa.setPadding(u(10), u(10), u(10), u(10));
 
         linhaFavoritos = horizontal();
         linhaFavoritos.setClipChildren(false);
@@ -957,16 +968,47 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "Removido dos favoritos", Toast.LENGTH_SHORT).show();
                 return true;
             });
-            LinearLayout.LayoutParams p = lp(dp(86), dp(86));
-            p.rightMargin = dp(12);
+            LinearLayout.LayoutParams p = lp(u(142), u(142));
+            p.rightMargin = u(14);
             linhaFavoritos.addView(tile, p);
         }
         LinearLayout mais = criarTileBase();
-        mais.addView(texto("+", 28, BRANCO));
-        mais.addView(texto("Adicionar", 10, BRANCO));
+        mais.addView(texto("+", 54, BRANCO));
+        mais.addView(texto("Adicionar", 20, BRANCO));
         mais.setOnClickListener(v -> abrirTodosApps(true));
-        linhaFavoritos.addView(mais, lp(dp(86), dp(86)));
+        linhaFavoritos.addView(mais, lp(u(142), u(142)));
     }
+
+    private LinearLayout criarTileBase() {
+        LinearLayout tile = vertical();
+        tile.setGravity(Gravity.CENTER);
+        tile.setPadding(u(8), u(8), u(8), u(8));
+        tile.setBackground(fundoFoco(28, criarVidro(28)));
+        tile.setFocusable(true);
+        tile.setOnFocusChangeListener((v, tem) -> v.animate()
+                .scaleX(tem ? 1.06f : 1f).scaleY(tem ? 1.06f : 1f)
+                .setDuration(120).start());
+        if (primeiroFoco == null) {
+            primeiroFoco = tile;
+        }
+        return tile;
+    }
+
+    // Favorito: só o ícone, grande e sem nome
+    private View criarTile(final ResolveInfo info) {
+        PackageManager pm = getPackageManager();
+        LinearLayout tile = criarTileBase();
+
+        ImageView icone = new ImageView(this);
+        icone.setImageDrawable(info.loadIcon(pm));
+        icone.setContentDescription(info.loadLabel(pm));
+        tile.addView(icone, lp(u(100), u(100)));
+
+        tile.setOnClickListener(v -> abrir(info));
+        return tile;
+    }
+
+    // ---------- Categorias ----------
 
     private View criarCategorias() {
         LinearLayout linha = horizontal();
@@ -980,10 +1022,8 @@ public class MainActivity extends Activity {
 
     private LinearLayout.LayoutParams pesoCategoria(boolean ultimo) {
         LinearLayout.LayoutParams p = lp(0, TODO, 1f);
-        p.topMargin = dp(4);
-        p.bottomMargin = dp(4);
         if (!ultimo) {
-            p.rightMargin = dp(10);
+            p.rightMargin = u(18);
         }
         return p;
     }
@@ -991,54 +1031,58 @@ public class MainActivity extends Activity {
     private View criarCategoria(int tipo, String nome, String detalhe) {
         LinearLayout cartao = horizontal();
         cartao.setGravity(Gravity.CENTER_VERTICAL);
-        cartao.setPadding(dp(10), dp(6), dp(8), dp(6));
-        cartao.setBackground(fundoFoco(16, criarVidro(16)));
+        cartao.setPadding(u(20), u(10), u(18), u(10));
+        cartao.setBackground(fundoFoco(28, criarVidro(28)));
         cartao.setFocusable(true);
 
         FrameLayout bolha = new FrameLayout(this);
-        bolha.setBackground(cor(40, 20));
-        FrameLayout.LayoutParams pi = new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER);
+        bolha.setBackground(cor(42, 33));
+        FrameLayout.LayoutParams pi = new FrameLayout.LayoutParams(u(34), u(34), Gravity.CENTER);
         bolha.addView(new IconeView(this, tipo), pi);
-        cartao.addView(bolha, lp(dp(36), dp(36)));
+        cartao.addView(bolha, lp(u(66), u(66)));
 
         LinearLayout textos = vertical();
-        textos.setPadding(dp(8), 0, dp(4), 0);
-        TextView t1 = texto(nome, 12, BRANCO);
+        textos.setPadding(u(18), 0, u(8), 0);
+        TextView t1 = texto(nome, 26, BRANCO);
         t1.setTypeface(null, Typeface.BOLD);
         t1.setMaxLines(1);
         t1.setEllipsize(TextUtils.TruncateAt.END);
         textos.addView(t1);
-        TextView t2 = texto(detalhe, 9, SUAVE);
+        TextView t2 = texto(detalhe, 19, SUAVE);
         t2.setMaxLines(2);
         t2.setEllipsize(TextUtils.TruncateAt.END);
         textos.addView(t2);
         cartao.addView(textos, lp(0, AUTO, 1f));
 
-        cartao.addView(new IconeView(this, I_SETA), lp(dp(12), dp(12)));
+        cartao.addView(new IconeView(this, I_SETA), lp(u(24), u(24)));
         cartao.setOnClickListener(v -> abrirTodosApps(false));
         return cartao;
     }
 
+    // ---------- Barra inferior ----------
+
     private View criarRodape() {
         LinearLayout barra = horizontal();
         barra.setGravity(Gravity.CENTER_VERTICAL);
-        barra.setBackground(criarVidro(17));
-        barra.setPadding(dp(14), 0, dp(14), 0);
-        barra.addView(new IconeView(this, I_ESTRELA), lp(dp(16), dp(16)));
-        TextView destaque = texto("Apps em destaque", 12, BRANCO);
-        destaque.setPadding(dp(8), 0, 0, 0);
+        barra.setBackground(criarVidro(29));
+        barra.setPadding(u(28), 0, u(34), 0);
+        barra.addView(new IconeView(this, I_ESTRELA), lp(u(30), u(30)));
+        TextView destaque = texto("Apps em destaque", 24, BRANCO);
+        destaque.setPadding(u(16), 0, 0, 0);
         barra.addView(destaque, lp(0, AUTO, 1f));
 
-        barra.addView(new IconeView(this, I_CONTROLE), lp(dp(12), dp(16)));
-        TextView pressione = texto("Pressione", 10, SUAVE);
-        pressione.setPadding(dp(5), 0, dp(5), 0);
+        barra.addView(new IconeView(this, I_CONTROLE), lp(u(24), u(32)));
+        TextView pressione = texto("Pressione", 20, SUAVE);
+        pressione.setPadding(u(10), 0, u(14), 0);
         barra.addView(pressione);
-        barra.addView(new IconeView(this, I_ANEL), lp(dp(14), dp(14)));
-        TextView abrirMenu = texto("para abrir o menu", 10, SUAVE);
-        abrirMenu.setPadding(dp(5), 0, 0, 0);
+        barra.addView(new IconeView(this, I_ANEL), lp(u(28), u(28)));
+        TextView abrirMenu = texto("para abrir o menu", 20, SUAVE);
+        abrirMenu.setPadding(u(10), 0, 0, 0);
         barra.addView(abrirMenu);
         return barra;
     }
+
+    // ---------- Lista de todos os apps / escolha de favoritos ----------
 
     private void abrirTodosApps(boolean escolherFavoritos) {
         if (overlay != null) {
@@ -1049,29 +1093,29 @@ public class MainActivity extends Activity {
         overlay.setBackground(fundoTela());
 
         LinearLayout caixa = vertical();
-        caixa.setPadding(dp(48), dp(28), dp(48), dp(24));
+        caixa.setPadding(u(96), u(60), u(96), u(40));
         TextView titulo = texto(escolherFavoritos ? "Escolha seus favoritos" : "Todos os aplicativos",
-                22, BRANCO);
+                44, BRANCO);
         titulo.setTypeface(null, Typeface.BOLD);
         caixa.addView(titulo);
         if (escolherFavoritos) {
             caixa.addView(texto("Aperte OK para marcar ou desmarcar. Voltar para concluir.",
-                    12, SUAVE));
+                    24, SUAVE));
         }
-        final TextView nomeSelecionado = texto(" ", 14, SUAVE);
-        nomeSelecionado.setPadding(0, dp(6), 0, 0);
+        final TextView nomeSelecionado = texto(" ", 28, SUAVE);
+        nomeSelecionado.setPadding(0, u(10), 0, 0);
         caixa.addView(nomeSelecionado);
 
         GridView grade = new GridView(this);
-        grade.setNumColumns(6);
-        grade.setVerticalSpacing(dp(12));
-        grade.setHorizontalSpacing(dp(12));
-        grade.setPadding(0, dp(12), 0, 0);
+        grade.setNumColumns(9);
+        grade.setVerticalSpacing(u(14));
+        grade.setHorizontalSpacing(u(14));
+        grade.setPadding(0, u(20), 0, 0);
         grade.setClipToPadding(false);
         GradientDrawable destaque = new GradientDrawable();
         destaque.setColor(Color.argb(40, 255, 255, 255));
-        destaque.setStroke(dp(3), AZUL);
-        destaque.setCornerRadius(dp(18));
+        destaque.setStroke(u(5), AZUL);
+        destaque.setCornerRadius(u(28));
         grade.setSelector(destaque);
         grade.setDrawSelectorOnTop(true);
         grade.setAdapter(new AppsAdapter());
@@ -1099,7 +1143,7 @@ public class MainActivity extends Activity {
 
         overlay.addView(caixa, new FrameLayout.LayoutParams(TODO, TODO));
         raiz.addView(overlay, new FrameLayout.LayoutParams(TODO, TODO));
-        coluna.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        tela.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         grade.requestFocus();
     }
 
@@ -1109,7 +1153,7 @@ public class MainActivity extends Activity {
         }
         raiz.removeView(overlay);
         overlay = null;
-        coluna.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        tela.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         if (modoFavoritos) {
             modoFavoritos = false;
             salvarFavoritos();
@@ -1119,6 +1163,52 @@ public class MainActivity extends Activity {
             primeiroFoco.requestFocus();
         }
     }
+
+    // Lista de todos os apps: só os ícones
+    private class AppsAdapter extends BaseAdapter {
+        @Override
+        public int getCount() {
+            return apps.size();
+        }
+
+        @Override
+        public Object getItem(int i) {
+            return apps.get(i);
+        }
+
+        @Override
+        public long getItemId(int i) {
+            return i;
+        }
+
+        @Override
+        public View getView(int i, View convertView, ViewGroup parent) {
+            LinearLayout linha;
+            ImageView icone;
+            if (convertView == null) {
+                linha = vertical();
+                linha.setGravity(Gravity.CENTER);
+                linha.setPadding(u(16), u(18), u(16), u(18));
+
+                icone = new ImageView(MainActivity.this);
+                icone.setId(1);
+                linha.addView(icone, lp(u(120), u(120)));
+            } else {
+                linha = (LinearLayout) convertView;
+                icone = linha.findViewById(1);
+            }
+            PackageManager pm = getPackageManager();
+            ResolveInfo info = apps.get(i);
+            boolean marcado = modoFavoritos
+                    && favoritos.contains(info.activityInfo.packageName);
+            linha.setBackground(cor(marcado ? 70 : 0, 28));
+            icone.setImageDrawable(info.loadIcon(pm));
+            icone.setContentDescription(info.loadLabel(pm));
+            return linha;
+        }
+    }
+
+    // ---------- Favoritos: dados ----------
 
     private String rotulo(ResolveInfo info) {
         return info.loadLabel(getPackageManager()).toString().toLowerCase(Locale.ROOT).trim();
@@ -1184,6 +1274,8 @@ public class MainActivity extends Activity {
         }
         return null;
     }
+
+    // ---------- Sugestões (TMDB e YouTube) ----------
 
     private void mostrar(final Sugestao s) {
         atual = s;
@@ -1368,90 +1460,19 @@ public class MainActivity extends Activity {
         return imagem;
     }
 
-    private LinearLayout criarTileBase() {
-        LinearLayout tile = vertical();
-        tile.setGravity(Gravity.CENTER);
-        tile.setPadding(dp(6), dp(6), dp(6), dp(6));
-        tile.setBackground(fundoFoco(16, criarVidro(16)));
-        tile.setFocusable(true);
-        tile.setOnFocusChangeListener((v, tem) -> v.animate()
-                .scaleX(tem ? 1.06f : 1f).scaleY(tem ? 1.06f : 1f)
-                .setDuration(120).start());
-        if (primeiroFoco == null) {
-            primeiroFoco = tile;
-        }
-        return tile;
-    }
-
-    // Favorito: só o ícone, grande e sem nome
-    private View criarTile(final ResolveInfo info) {
-        PackageManager pm = getPackageManager();
-        LinearLayout tile = criarTileBase();
-
-        ImageView icone = new ImageView(this);
-        icone.setImageDrawable(info.loadIcon(pm));
-        icone.setContentDescription(info.loadLabel(pm));
-        tile.addView(icone, lp(dp(58), dp(58)));
-
-        tile.setOnClickListener(v -> abrir(info));
-        return tile;
-    }
-
-    // Lista de todos os apps: só os ícones
-    private class AppsAdapter extends BaseAdapter {
-        @Override
-        public int getCount() {
-            return apps.size();
-        }
-
-        @Override
-        public Object getItem(int i) {
-            return apps.get(i);
-        }
-
-        @Override
-        public long getItemId(int i) {
-            return i;
-        }
-
-        @Override
-        public View getView(int i, View convertView, ViewGroup parent) {
-            LinearLayout linha;
-            ImageView icone;
-            if (convertView == null) {
-                linha = vertical();
-                linha.setGravity(Gravity.CENTER);
-                linha.setPadding(dp(10), dp(12), dp(10), dp(12));
-
-                icone = new ImageView(MainActivity.this);
-                icone.setId(1);
-                linha.addView(icone, lp(dp(76), dp(76)));
-            } else {
-                linha = (LinearLayout) convertView;
-                icone = linha.findViewById(1);
-            }
-            PackageManager pm = getPackageManager();
-            ResolveInfo info = apps.get(i);
-            boolean marcado = modoFavoritos
-                    && favoritos.contains(info.activityInfo.packageName);
-            linha.setBackground(cor(marcado ? 70 : 0, 14));
-            icone.setImageDrawable(info.loadIcon(pm));
-            icone.setContentDescription(info.loadLabel(pm));
-            return linha;
-        }
-    }
+    // ---------- Ferramentas de montagem ----------
 
     private TextView secao(String titulo) {
-        TextView t = texto(titulo, 14, BRANCO);
+        TextView t = texto(titulo, 32, BRANCO);
         t.setTypeface(null, Typeface.BOLD);
-        t.setPadding(dp(4), dp(8), 0, dp(2));
+        t.setGravity(Gravity.CENTER_VERTICAL);
         return t;
     }
 
-    private TextView texto(String conteudo, int sp, int corTexto) {
+    private TextView texto(String conteudo, float px, int corTexto) {
         TextView t = new TextView(this);
         t.setText(conteudo);
-        t.setTextSize(sp);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_PX, u(px));
         t.setTextColor(corTexto);
         return t;
     }
@@ -1476,42 +1497,38 @@ public class MainActivity extends Activity {
         return new LinearLayout.LayoutParams(largura, altura, peso);
     }
 
-    private Drawable cor(int alfa, int raio) {
+    private Drawable cor(int alfa, int raioU) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(Color.argb(alfa, 255, 255, 255));
-        d.setCornerRadius(dp(raio));
+        d.setCornerRadius(u(raioU));
         return d;
     }
 
     // Item selecionado: anel azul claro com brilho, como o Netflix da imagem
-    private Drawable fundoFoco(int raio, Drawable normal) {
+    private Drawable fundoFoco(int raioU, Drawable normal) {
         GradientDrawable halo = new GradientDrawable();
         halo.setColor(Color.TRANSPARENT);
-        halo.setStroke(dp(7), Color.argb(70, 120, 175, 255));
-        halo.setCornerRadius(dp(raio));
+        halo.setStroke(u(12), Color.argb(70, 120, 175, 255));
+        halo.setCornerRadius(u(raioU));
 
         GradientDrawable anel = new GradientDrawable();
         anel.setColor(Color.argb(40, 255, 255, 255));
-        anel.setStroke(dp(2), AZUL);
-        anel.setCornerRadius(dp(raio));
+        anel.setStroke(u(4), AZUL);
+        anel.setCornerRadius(u(raioU));
 
-        Drawable comVidro = new LayerDrawable(new Drawable[]{criarVidro(raio), halo, anel});
+        Drawable comVidro = new LayerDrawable(new Drawable[]{criarVidro(raioU), halo, anel});
         StateListDrawable estados = new StateListDrawable();
         estados.addState(new int[]{android.R.attr.state_focused}, comVidro);
         estados.addState(new int[]{}, normal);
         return estados;
     }
 
-    private Drawable criarVidro(int raio) {
-        return new Vidro(raio, false);
+    private Drawable criarVidro(int raioU) {
+        return new Vidro(raioU, false);
     }
 
-    private Drawable criarVidro(int raio, boolean nitido) {
-        return new Vidro(raio, nitido);
-    }
-
-    private int dp(int valor) {
-        return (int) (valor * getResources().getDisplayMetrics().density);
+    private Drawable criarVidro(int raioU, boolean nitido) {
+        return new Vidro(raioU, nitido);
     }
 
     private void avisar(String nome) {
@@ -1545,4 +1562,4 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Não foi possível abrir este app", Toast.LENGTH_SHORT).show();
         }
     }
-}
+    }

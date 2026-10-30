@@ -796,9 +796,840 @@ public class MainActivity extends Activity {
         }
         return null;
     }
-
-    // ---------- Widgets ----------
+        // ---------- Widgets ----------
 
     private View criarWidgetClima() {
         LinearLayout widget = horizontal();
-        widget.
+        widget.setGravity(Gravity.CENTER_VERTICAL);
+        widget.setBackground(criarVidro(40));
+        widget.setPadding(u(22), u(14), u(18), u(14));
+        widget.addView(new IconeView(this, I_CLIMA), lp(u(66), u(66)));
+
+        LinearLayout textos = vertical();
+        textos.setPadding(u(16), 0, 0, 0);
+        climaCidadeView = texto(climaCidade, 22, SUAVE);
+        climaCidadeView.setMaxLines(1);
+        climaCidadeView.setEllipsize(TextUtils.TruncateAt.END);
+        textos.addView(climaCidadeView);
+        climaTempView = texto(climaTemp, 56, BRANCO);
+        climaTempView.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        climaTempView.setIncludeFontPadding(false);
+        textos.addView(climaTempView);
+        climaDescView = texto(climaDesc, 20, SUAVE);
+        climaDescView.setMaxLines(2);
+        climaDescView.setEllipsize(TextUtils.TruncateAt.END);
+        textos.addView(climaDescView);
+        widget.addView(textos, lp(0, AUTO, 1f));
+        return widget;
+    }
+
+    private void aplicarClima() {
+        if (climaCidadeView != null) {
+            climaCidadeView.setText(climaCidade);
+            climaTempView.setText(climaTemp);
+            climaDescView.setText(climaDesc);
+        }
+    }
+
+    private View criarWidgetEntradas() {
+        LinearLayout widget = vertical();
+        widget.setBackground(fundoFoco(40, criarVidro(40)));
+        widget.setFocusable(true);
+        widget.setPadding(u(26), u(20), u(22), u(20));
+        widget.addView(texto("Entradas", 24, SUAVE));
+
+        LinearLayout linha = horizontal();
+        linha.setGravity(Gravity.CENTER_VERTICAL);
+        linha.addView(new IconeView(this, I_TV), lp(u(40), u(40)));
+        TextView nome = texto("TV / HDMI", 30, BRANCO);
+        nome.setMaxLines(1);
+        nome.setPadding(u(14), 0, 0, 0);
+        linha.addView(nome, lp(0, AUTO, 1f));
+        linha.addView(new IconeView(this, I_SETA), lp(u(26), u(26)));
+        LinearLayout.LayoutParams pl = lp(TODO, 0, 1f);
+        widget.addView(linha, pl);
+
+        widget.setOnClickListener(v -> mostrarTela("entradas"));
+        return widget;
+    }
+
+    // ---------- Fileiras de apps ----------
+
+    private TextView secao(String titulo) {
+        TextView t = texto(titulo, 32, BRANCO);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        return t;
+    }
+
+    private View criarFaixaFavoritos() {
+        HorizontalScrollView faixa = new HorizontalScrollView(this);
+        faixa.setHorizontalScrollBarEnabled(false);
+        faixa.setClipToPadding(false);
+        faixa.setPadding(u(10), u(10), u(10), u(10));
+        linhaFavoritos = horizontal();
+        linhaFavoritos.setClipChildren(false);
+        preencherFavoritos();
+        faixa.addView(linhaFavoritos, new FrameLayout.LayoutParams(AUTO, AUTO));
+        return faixa;
+    }
+
+    private void preencherFavoritos() {
+        if (linhaFavoritos == null) {
+            return;
+        }
+        linhaFavoritos.removeAllViews();
+        for (String pacote : new ArrayList<>(favoritos)) {
+            ResolveInfo info = acharApp(pacote);
+            if (info != null) {
+                linhaFavoritos.addView(criarCelula(info, "SEUS APLICATIVOS", 130, 108),
+                        lp(u(158), AUTO));
+            }
+        }
+        if (linhaFavoritos.getChildCount() == 0) {
+            TextView vazio = texto("Segure OK em um app para favoritar.", 28, SUAVE);
+            vazio.setPadding(u(10), u(40), 0, 0);
+            linhaFavoritos.addView(vazio);
+        }
+    }
+
+    private View criarFaixaTodos() {
+        HorizontalScrollView faixa = new HorizontalScrollView(this);
+        faixa.setHorizontalScrollBarEnabled(false);
+        faixa.setClipToPadding(false);
+        faixa.setPadding(u(10), u(10), u(10), u(10));
+        linhaTodos = horizontal();
+        linhaTodos.setClipChildren(false);
+        for (ResolveInfo info : apps) {
+            linhaTodos.addView(criarCelula(info, "TODOS OS APPS", 130, 108), lp(u(158), AUTO));
+        }
+        faixa.addView(linhaTodos, new FrameLayout.LayoutParams(AUTO, AUTO));
+        return faixa;
+    }
+
+    // Um app: ícone num quadrado de vidro, estrela se for favorito e nome embaixo
+    private View criarCelula(final ResolveInfo info, final String origem, int tilePx, int iconePx) {
+        PackageManager pm = getPackageManager();
+        final String pacote = info.activityInfo.packageName;
+        final String nome = info.loadLabel(pm).toString();
+
+        LinearLayout celula = vertical();
+        celula.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        FrameLayout tile = new FrameLayout(this);
+        tile.setBackground(fundoFoco(30, criarVidro(30)));
+        tile.setFocusable(true);
+
+        ImageView icone = new ImageView(this);
+        icone.setImageDrawable(info.loadIcon(pm));
+        icone.setContentDescription(nome);
+        tile.addView(icone, new FrameLayout.LayoutParams(u(iconePx), u(iconePx), Gravity.CENTER));
+
+        View estrela = new IconeView(this, I_ESTRELA);
+        FrameLayout.LayoutParams pe = new FrameLayout.LayoutParams(
+                u(28), u(28), Gravity.TOP | Gravity.END);
+        pe.setMargins(0, u(8), u(8), 0);
+        tile.addView(estrela, pe);
+        estrela.setVisibility(favoritos.contains(pacote) ? View.VISIBLE : View.GONE);
+        List<View> lista = estrelas.get(pacote);
+        if (lista == null) {
+            lista = new ArrayList<>();
+            estrelas.put(pacote, lista);
+        }
+        lista.add(estrela);
+
+        tile.setOnClickListener(v -> abrir(info));
+        tile.setOnLongClickListener(v -> {
+            alternarFavoritoNaTela(pacote);
+            return true;
+        });
+        tile.setOnFocusChangeListener((v, tem) -> {
+            v.animate().scaleX(tem ? 1.08f : 1f).scaleY(tem ? 1.08f : 1f)
+                    .setDuration(120).start();
+            if (tem) {
+                heroParaApp(info, origem);
+            }
+        });
+        celula.addView(tile, lp(u(tilePx), u(tilePx)));
+
+        if (nomesLigados) {
+            TextView rotuloApp = texto(nome, 24, BRANCO);
+            rotuloApp.setGravity(Gravity.CENTER);
+            rotuloApp.setMaxLines(1);
+            rotuloApp.setEllipsize(TextUtils.TruncateAt.END);
+            rotuloApp.setPadding(0, u(10), 0, 0);
+            celula.addView(rotuloApp, lp(u(tilePx + 20), AUTO));
+        }
+        return celula;
+    }
+
+    private void alternarFavoritoNaTela(String pacote) {
+        boolean eraFavorito = favoritos.contains(pacote);
+        if (eraFavorito) {
+            favoritos.remove(pacote);
+        } else {
+            favoritos.add(pacote);
+        }
+        salvarFavoritos();
+        List<View> lista = estrelas.get(pacote);
+        if (lista != null) {
+            for (View s : lista) {
+                s.setVisibility(favoritos.contains(pacote) ? View.VISIBLE : View.GONE);
+            }
+        }
+        if (linhaFavoritos != null) {
+            preencherFavoritos();
+            if (tela.findFocus() == null) {
+                View alvo = primeiroTile(linhaFavoritos);
+                if (alvo == null) {
+                    alvo = primeiroTile(linhaTodos);
+                }
+                if (alvo != null) {
+                    alvo.requestFocus();
+                }
+            }
+        }
+        Toast.makeText(this, eraFavorito ? "Removido dos favoritos" : "Adicionado aos favoritos",
+                Toast.LENGTH_SHORT).show();
+    }
+
+    // ---------- Painéis de apps (Apps, Filmes, TV, Jogos, Música) ----------
+
+    private String tituloPainel(String id) {
+        switch (id) {
+            case "filmes":
+                return "Filmes e Séries";
+            case "tv":
+                return "TV ao Vivo";
+            case "jogos":
+                return "Jogos";
+            case "musica":
+                return "Música";
+            default:
+                return "Todos os apps";
+        }
+    }
+
+    private void montarPainelApps(String id) {
+        LinearLayout painel = vertical();
+        painel.setBackground(criarVidro(48));
+        painel.setPadding(u(50), u(36), u(50), u(30));
+
+        TextView titulo = texto(tituloPainel(id), 44, BRANCO);
+        titulo.setTypeface(null, Typeface.BOLD);
+        painel.addView(titulo, lp(TODO, u(70)));
+
+        ScrollView rolagem = new ScrollView(this);
+        rolagem.setVerticalScrollBarEnabled(false);
+        rolagem.setClipToPadding(false);
+        rolagem.setPadding(u(12), u(12), u(12), u(12));
+
+        LinearLayout grade = vertical();
+        grade.setClipChildren(false);
+
+        List<ResolveInfo> lista = new ArrayList<>();
+        for (ResolveInfo info : apps) {
+            if (pertence(info, id)) {
+                lista.add(info);
+            }
+        }
+        if (lista.isEmpty()) {
+            grade.addView(texto("Nenhum app encontrado nesta categoria.", 30, SUAVE));
+        }
+        int colunas = 7;
+        for (int i = 0; i < lista.size(); i += colunas) {
+            LinearLayout fila = horizontal();
+            fila.setClipChildren(false);
+            for (int j = i; j < Math.min(i + colunas, lista.size()); j++) {
+                View celula = criarCelula(lista.get(j), "TODOS OS APPS", 130, 108);
+                if (focoInicial == null && celula instanceof LinearLayout) {
+                    focoInicial = ((LinearLayout) celula).getChildAt(0);
+                }
+                fila.addView(celula, lp(u(168), AUTO));
+            }
+            LinearLayout.LayoutParams pf = lp(TODO, AUTO);
+            pf.bottomMargin = u(16);
+            grade.addView(fila, pf);
+        }
+        rolagem.addView(grade, new FrameLayout.LayoutParams(TODO, AUTO));
+        painel.addView(rolagem, lp(TODO, 0, 1f));
+        colocar(painel, 560, 150, 1300, 850);
+    }
+
+    private boolean contem(String texto, String[] chaves) {
+        for (String chave : chaves) {
+            if (texto.contains(chave)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean pertence(ResolveInfo info, String id) {
+        String r = rotulo(info);
+        String chave = r + " " + info.activityInfo.packageName.toLowerCase(Locale.ROOT);
+        int cat = info.activityInfo.applicationInfo.category;
+        switch (id) {
+            case "apps":
+                return true;
+            case "musica":
+                return cat == ApplicationInfo.CATEGORY_AUDIO || contem(chave, K_MUSICA);
+            case "jogos":
+                return cat == ApplicationInfo.CATEGORY_GAME || contem(chave, K_JOGOS);
+            case "filmes":
+                return !contem(r, K_NAO_FILMES)
+                        && (cat == ApplicationInfo.CATEGORY_VIDEO || contem(chave, K_FILMES));
+            case "tv":
+                return contem(r, K_TV);
+            default:
+                return false;
+        }
+    }
+
+    private String categoriaTexto(ResolveInfo info) {
+        if (pertence(info, "musica")) {
+            return "Música";
+        }
+        if (pertence(info, "jogos")) {
+            return "Jogos";
+        }
+        if (pertence(info, "filmes")) {
+            return "Filmes e Séries";
+        }
+        if (pertence(info, "tv")) {
+            return "TV ao Vivo";
+        }
+        return "Aplicativo";
+    }
+
+    // ---------- Entradas (HDMI) ----------
+
+    private void montarEntradas() {
+        LinearLayout painel = vertical();
+        painel.setBackground(criarVidro(48));
+        painel.setPadding(u(50), u(36), u(50), u(30));
+
+        TextView titulo = texto("Entradas", 44, BRANCO);
+        titulo.setTypeface(null, Typeface.BOLD);
+        painel.addView(titulo, lp(TODO, u(70)));
+
+        List<TvInputInfo> entradas = listarEntradas();
+        if (entradas.isEmpty()) {
+            TextView aviso = texto("Nenhuma entrada encontrada. "
+                    + "Use o botão Entrada do controle da TV.", 30, SUAVE);
+            painel.addView(aviso);
+        }
+        for (final TvInputInfo entrada : entradas) {
+            LinearLayout linha = horizontal();
+            linha.setGravity(Gravity.CENTER_VERTICAL);
+            linha.setPadding(u(30), 0, u(30), 0);
+            linha.setFocusable(true);
+            linha.setBackground(fundoFoco(34, criarVidro(34)));
+            linha.addView(new IconeView(this, I_TV), lp(u(44), u(44)));
+            TextView nome = texto(nomeEntrada(entrada), 34, BRANCO);
+            nome.setPadding(u(22), 0, 0, 0);
+            linha.addView(nome);
+            linha.setOnClickListener(v -> abrirEntrada(entrada));
+            LinearLayout.LayoutParams p = lp(TODO, u(84));
+            p.bottomMargin = u(14);
+            painel.addView(linha, p);
+            if (focoInicial == null) {
+                focoInicial = linha;
+            }
+        }
+        colocar(painel, 560, 150, 1300, 850);
+    }
+
+    private List<TvInputInfo> listarEntradas() {
+        List<TvInputInfo> resultado = new ArrayList<>();
+        try {
+            TvInputManager gerente = (TvInputManager) getSystemService(Context.TV_INPUT_SERVICE);
+            if (gerente != null) {
+                for (TvInputInfo info : gerente.getTvInputList()) {
+                    if (info.isPassthroughInput()) {
+                        resultado.add(info);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            return resultado;
+        }
+        return resultado;
+    }
+
+    private String nomeEntrada(TvInputInfo info) {
+        try {
+            CharSequence personalizado = info.loadCustomLabel(this);
+            if (personalizado != null && personalizado.length() > 0) {
+                return personalizado.toString();
+            }
+            CharSequence padrao = info.loadLabel(this);
+            if (padrao != null && padrao.length() > 0) {
+                return padrao.toString();
+            }
+        } catch (Exception e) {
+            return "Entrada";
+        }
+        return "Entrada";
+    }
+
+    private void abrirEntrada(TvInputInfo info) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW,
+                    TvContract.buildChannelUriForPassthroughInput(info.getId()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível abrir esta entrada", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // ---------- Personalizar ----------
+
+    private void montarPersonalizar() {
+        LinearLayout painel = vertical();
+        painel.setBackground(criarVidro(48));
+        painel.setPadding(u(50), u(36), u(50), u(30));
+
+        TextView titulo = texto("Personalizar", 44, BRANCO);
+        titulo.setTypeface(null, Typeface.BOLD);
+        painel.addView(titulo, lp(TODO, u(70)));
+
+        View opcaoFosco = criarOpcao("Vidro fosco", foscoLigado, () -> {
+            prefs.edit().putBoolean("fosco", !foscoLigado).apply();
+            recreate();
+        });
+        painel.addView(opcaoFosco, opcaoParams());
+        focoInicial = opcaoFosco;
+
+        painel.addView(criarOpcao("Nomes dos apps", nomesLigados, () -> {
+            prefs.edit().putBoolean("nomes", !nomesLigados).apply();
+            recreate();
+        }), opcaoParams());
+
+        TextView nota = texto("Cidade do clima: " + CIDADE
+                + " (para mudar, edite a linha CIDADE no código).", 26, SUAVE);
+        nota.setPadding(0, u(20), 0, 0);
+        painel.addView(nota);
+
+        colocar(painel, 560, 150, 1300, 850);
+    }
+
+    private LinearLayout.LayoutParams opcaoParams() {
+        LinearLayout.LayoutParams p = lp(TODO, u(84));
+        p.bottomMargin = u(14);
+        return p;
+    }
+
+    private View criarOpcao(String nome, boolean ligado, final Runnable acao) {
+        LinearLayout linha = horizontal();
+        linha.setGravity(Gravity.CENTER_VERTICAL);
+        linha.setPadding(u(30), 0, u(30), 0);
+        linha.setFocusable(true);
+        linha.setBackground(fundoFoco(34, criarVidro(34)));
+        linha.addView(texto(nome, 34, BRANCO), lp(0, AUTO, 1f));
+        linha.addView(texto(ligado ? "Ligado" : "Desligado", 32, AZUL));
+        linha.setOnClickListener(v -> acao.run());
+        return linha;
+    }
+
+    // ---------- Loja e ajustes ----------
+
+    private void abrirLoja() {
+        ResolveInfo loja = acharApp("com.android.vending");
+        if (loja == null) {
+            loja = acharPorNome("play store");
+        }
+        if (loja != null) {
+            abrir(loja);
+        } else {
+            Toast.makeText(this, "Loja de apps não encontrada", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void abrirAjustes() {
+        try {
+            Intent intent = new Intent(Settings.ACTION_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível abrir os ajustes", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // ---------- Clima (Open-Meteo, sem chave) ----------
+
+    private void carregarClima() {
+        if (CIDADE.isEmpty()) {
+            return;
+        }
+        try {
+            String busca = "https://geocoding-api.open-meteo.com/v1/search?count=1"
+                    + "&language=pt&format=json&name=" + URLEncoder.encode(CIDADE, "UTF-8");
+            JSONArray resultados = new JSONObject(baixarTexto(busca)).optJSONArray("results");
+            if (resultados == null || resultados.length() == 0) {
+                return;
+            }
+            JSONObject lugar = resultados.getJSONObject(0);
+            double lat = lugar.getDouble("latitude");
+            double lon = lugar.getDouble("longitude");
+            String nome = lugar.optString("name", CIDADE);
+
+            String previsao = "https://api.open-meteo.com/v1/forecast"
+                    + "?current=temperature_2m,weather_code&timezone=auto"
+                    + "&latitude=" + lat + "&longitude=" + lon;
+            JSONObject atual = new JSONObject(baixarTexto(previsao)).getJSONObject("current");
+            double temperatura = atual.getDouble("temperature_2m");
+            int codigo = atual.getInt("weather_code");
+
+            climaCidade = nome;
+            climaTemp = Math.round(temperatura) + "°";
+            climaDesc = descricaoClima(codigo);
+        } catch (Exception e) {
+            climaDesc = "Sem dados do clima";
+        }
+        runOnUiThread(this::aplicarClima);
+            }
+        // ---------- Personalizar ----------
+
+    private void montarPersonalizar() {
+        LinearLayout painel = vertical();
+        painel.setBackground(criarVidro(48));
+        painel.setPadding(u(50), u(36), u(50), u(30));
+
+        TextView titulo = texto("Personalizar", 44, BRANCO);
+        titulo.setTypeface(null, Typeface.BOLD);
+        painel.addView(titulo, lp(TODO, u(70)));
+
+        View opcaoFosco = criarOpcao("Vidro fosco", foscoLigado, () -> {
+            prefs.edit().putBoolean("fosco", !foscoLigado).apply();
+            recreate();
+        });
+        painel.addView(opcaoFosco, opcaoParams());
+        focoInicial = opcaoFosco;
+
+        painel.addView(criarOpcao("Nomes dos apps", nomesLigados, () -> {
+            prefs.edit().putBoolean("nomes", !nomesLigados).apply();
+            recreate();
+        }), opcaoParams());
+
+        TextView nota = texto("Cidade do clima: " + CIDADE
+                + " (para mudar, edite a linha CIDADE no código).", 26, SUAVE);
+        nota.setPadding(0, u(20), 0, 0);
+        painel.addView(nota);
+
+        colocar(painel, 560, 150, 1300, 850);
+    }
+
+    private LinearLayout.LayoutParams opcaoParams() {
+        LinearLayout.LayoutParams p = lp(TODO, u(84));
+        p.bottomMargin = u(14);
+        return p;
+    }
+
+    private View criarOpcao(String nome, boolean ligado, final Runnable acao) {
+        LinearLayout linha = horizontal();
+        linha.setGravity(Gravity.CENTER_VERTICAL);
+        linha.setPadding(u(30), 0, u(30), 0);
+        linha.setFocusable(true);
+        linha.setBackground(fundoFoco(34, criarVidro(34)));
+        linha.addView(texto(nome, 34, BRANCO), lp(0, AUTO, 1f));
+        linha.addView(texto(ligado ? "Ligado" : "Desligado", 32, AZUL));
+        linha.setOnClickListener(v -> acao.run());
+        return linha;
+    }
+
+    // ---------- Loja e ajustes ----------
+
+    private void abrirLoja() {
+        ResolveInfo loja = acharApp("com.android.vending");
+        if (loja == null) {
+            loja = acharPorNome("play store");
+        }
+        if (loja != null) {
+            abrir(loja);
+        } else {
+            Toast.makeText(this, "Loja de apps não encontrada", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void abrirAjustes() {
+        try {
+            Intent intent = new Intent(Settings.ACTION_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível abrir os ajustes", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // ---------- Clima (Open-Meteo, sem chave) ----------
+
+    private void carregarClima() {
+        if (CIDADE.isEmpty()) {
+            return;
+        }
+        try {
+            String busca = "https://geocoding-api.open-meteo.com/v1/search?count=1"
+                    + "&language=pt&format=json&name=" + URLEncoder.encode(CIDADE, "UTF-8");
+            JSONArray resultados = new JSONObject(baixarTexto(busca)).optJSONArray("results");
+            if (resultados == null || resultados.length() == 0) {
+                return;
+            }
+            JSONObject lugar = resultados.getJSONObject(0);
+            double lat = lugar.getDouble("latitude");
+            double lon = lugar.getDouble("longitude");
+            String nome = lugar.optString("name", CIDADE);
+
+            String previsao = "https://api.open-meteo.com/v1/forecast"
+                    + "?current=temperature_2m,weather_code&timezone=auto"
+                    + "&latitude=" + lat + "&longitude=" + lon;
+            JSONObject atual = new JSONObject(baixarTexto(previsao)).getJSONObject("current");
+            double temperatura = atual.getDouble("temperature_2m");
+            int codigo = atual.getInt("weather_code");
+
+            climaCidade = nome;
+            climaTemp = Math.round(temperatura) + "°";
+            climaDesc = descricaoClima(codigo);
+        } catch (Exception e) {
+            climaDesc = "Sem dados do clima";
+        }
+        runOnUiThread(this::aplicarClima);
+    }
+
+    private String descricaoClima(int codigo) {
+        if (codigo == 0) {
+            return "Céu limpo";
+        }
+        if (codigo <= 3) {
+            return "Parcialmente nublado";
+        }
+        if (codigo == 45 || codigo == 48) {
+            return "Neblina";
+        }
+        if (codigo >= 51 && codigo <= 57) {
+            return "Garoa";
+        }
+        if (codigo >= 61 && codigo <= 67) {
+            return "Chuva";
+        }
+        if (codigo >= 71 && codigo <= 77) {
+            return "Neve";
+        }
+        if (codigo >= 80 && codigo <= 82) {
+            return "Pancadas de chuva";
+        }
+        if (codigo >= 95) {
+            return "Tempestade";
+        }
+        return "Tempo instável";
+    }
+
+    private String baixarTexto(String endereco) throws Exception {
+        HttpURLConnection conexao = (HttpURLConnection) new URL(endereco).openConnection();
+        conexao.setConnectTimeout(8000);
+        conexao.setReadTimeout(8000);
+        InputStream entrada = conexao.getInputStream();
+        BufferedReader leitor = new BufferedReader(new InputStreamReader(entrada, "UTF-8"));
+        StringBuilder texto = new StringBuilder();
+        String linha;
+        while ((linha = leitor.readLine()) != null) {
+            texto.append(linha);
+        }
+        leitor.close();
+        return texto.toString();
+    }
+
+    // ---------- Favoritos e apps: dados ----------
+
+    private String rotulo(ResolveInfo info) {
+        return info.loadLabel(getPackageManager()).toString().toLowerCase(Locale.ROOT).trim();
+    }
+
+    private ResolveInfo acharPorNome(String chave) {
+        for (ResolveInfo info : apps) {
+            if (rotulo(info).equals(chave)) {
+                return info;
+            }
+        }
+        for (ResolveInfo info : apps) {
+            if (rotulo(info).contains(chave)) {
+                return info;
+            }
+        }
+        return null;
+    }
+
+    private ResolveInfo acharApp(String pacote) {
+        for (ResolveInfo info : apps) {
+            if (info.activityInfo.packageName.equals(pacote)) {
+                return info;
+            }
+        }
+        return null;
+    }
+
+    private void carregarFavoritos() {
+        String salvo = prefs.getString("favoritos", null);
+        favoritos.clear();
+        if (salvo == null) {
+            for (String chave : FAVORITOS_PADRAO) {
+                ResolveInfo achado = acharPorNome(chave);
+                if (achado != null
+                        && !favoritos.contains(achado.activityInfo.packageName)) {
+                    favoritos.add(achado.activityInfo.packageName);
+                }
+            }
+            if (favoritos.isEmpty()) {
+                for (int i = 0; i < Math.min(8, apps.size()); i++) {
+                    favoritos.add(apps.get(i).activityInfo.packageName);
+                }
+            }
+        } else if (!salvo.isEmpty()) {
+            for (String pacote : salvo.split(",")) {
+                if (acharApp(pacote) != null) {
+                    favoritos.add(pacote);
+                }
+            }
+        }
+    }
+
+    private void salvarFavoritos() {
+        prefs.edit().putString("favoritos", TextUtils.join(",", favoritos)).apply();
+    }
+
+    private void carregarApps() {
+        final PackageManager pm = getPackageManager();
+        Set<String> vistos = new HashSet<>();
+        String[] categorias = {Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER};
+        for (String categoria : categorias) {
+            Intent filtro = new Intent(Intent.ACTION_MAIN).addCategory(categoria);
+            for (ResolveInfo info : pm.queryIntentActivities(filtro, 0)) {
+                if (vistos.add(info.activityInfo.packageName)) {
+                    apps.add(info);
+                }
+            }
+        }
+        Collections.sort(apps, (a, b) ->
+                a.loadLabel(pm).toString().compareToIgnoreCase(b.loadLabel(pm).toString()));
+    }
+
+    private void abrir(ResolveInfo info) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.setComponent(new ComponentName(
+                    info.activityInfo.packageName, info.activityInfo.name));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível abrir este app", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // ---------- Fundo e vidro ----------
+
+    private Bitmap carregarFoto() {
+        try (InputStream entrada = getAssets().open("fundo.jpg")) {
+            return BitmapFactory.decodeStream(entrada);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Drawable fundoTela() {
+        if (foto != null) {
+            return new FundoFoto(foto);
+        }
+        return new Paisagem();
+    }
+
+    private Bitmap reduzir(Bitmap origem, int larguraAlvo) {
+        Bitmap atualBitmap = origem;
+        while (atualBitmap.getWidth() / 2 >= larguraAlvo) {
+            atualBitmap = Bitmap.createScaledBitmap(atualBitmap, atualBitmap.getWidth() / 2,
+                    atualBitmap.getHeight() / 2, true);
+        }
+        return atualBitmap;
+    }
+
+    private Bitmap criarFundoDesfocado() {
+        Bitmap medio = Bitmap.createBitmap(96, 54, Bitmap.Config.ARGB_8888);
+        Drawable base;
+        if (foto != null) {
+            base = new FundoFoto(reduzir(foto, 100));
+        } else {
+            base = new Paisagem();
+        }
+        base.setBounds(0, 0, 96, 54);
+        base.draw(new Canvas(medio));
+        return Bitmap.createScaledBitmap(medio, 48, 27, true);
+    }
+
+    private Drawable criarVidro(int raioU) {
+        return new Vidro(raioU);
+    }
+
+    private Drawable cor(int alfa, int raioU) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(Color.argb(alfa, 255, 255, 255));
+        d.setCornerRadius(u(raioU));
+        return d;
+    }
+
+    // Item ativo do menu: preenchimento suave com anel azul claro
+    private Drawable ativoDrawable(int raioU) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(Color.argb(60, 255, 255, 255));
+        d.setStroke(u(3), AZUL);
+        d.setCornerRadius(u(raioU));
+        return d;
+    }
+
+    // Item selecionado: anel azul claro com brilho
+    private Drawable fundoFoco(int raioU, Drawable normal) {
+        GradientDrawable halo = new GradientDrawable();
+        halo.setColor(Color.TRANSPARENT);
+        halo.setStroke(u(12), Color.argb(70, 120, 175, 255));
+        halo.setCornerRadius(u(raioU));
+
+        GradientDrawable anel = new GradientDrawable();
+        anel.setColor(Color.argb(40, 255, 255, 255));
+        anel.setStroke(u(4), AZUL);
+        anel.setCornerRadius(u(raioU));
+
+        Drawable comVidro = new LayerDrawable(new Drawable[]{criarVidro(raioU), halo, anel});
+        StateListDrawable estados = new StateListDrawable();
+        estados.addState(new int[]{android.R.attr.state_focused}, comVidro);
+        estados.addState(new int[]{}, normal);
+        return estados;
+    }
+
+    // ---------- Ferramentas de montagem ----------
+
+    private TextView texto(String conteudo, float px, int corTexto) {
+        TextView t = new TextView(this);
+        t.setText(conteudo);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_PX, u(px));
+        t.setTextColor(corTexto);
+        return t;
+    }
+
+    private LinearLayout vertical() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        return l;
+    }
+
+    private LinearLayout horizontal() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.HORIZONTAL);
+        return l;
+    }
+
+    private LinearLayout.LayoutParams lp(int largura, int altura) {
+        return new LinearLayout.LayoutParams(largura, altura);
+    }
+
+    private LinearLayout.LayoutParams lp(int largura, int altura, float peso) {
+        return new LinearLayout.LayoutParams(largura, altura, peso);
+    }
+            }

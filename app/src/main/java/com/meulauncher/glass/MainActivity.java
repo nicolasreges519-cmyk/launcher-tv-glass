@@ -1288,7 +1288,7 @@ public class MainActivity extends Activity {
             climaDesc = "Sem dados do clima";
         }
         runOnUiThread(this::aplicarClima);
-            }
+    }
         // ---------- Personalizar ----------
 
     private void montarPersonalizar() {
@@ -1632,4 +1632,4 @@ public class MainActivity extends Activity {
     private LinearLayout.LayoutParams lp(int largura, int altura, float peso) {
         return new LinearLayout.LayoutParams(largura, altura, peso);
     }
-            }
+    }

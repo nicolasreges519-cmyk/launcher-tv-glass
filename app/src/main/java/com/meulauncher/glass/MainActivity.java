@@ -796,7 +796,8 @@ public class MainActivity extends Activity {
         }
         return null;
     }
-        // ---------- Widgets ----------
+
+    // ---------- Widgets ----------
 
     private View criarWidgetClima() {
         LinearLayout widget = horizontal();
@@ -1289,112 +1290,6 @@ public class MainActivity extends Activity {
         }
         runOnUiThread(this::aplicarClima);
     }
-        // ---------- Personalizar ----------
-
-    private void montarPersonalizar() {
-        LinearLayout painel = vertical();
-        painel.setBackground(criarVidro(48));
-        painel.setPadding(u(50), u(36), u(50), u(30));
-
-        TextView titulo = texto("Personalizar", 44, BRANCO);
-        titulo.setTypeface(null, Typeface.BOLD);
-        painel.addView(titulo, lp(TODO, u(70)));
-
-        View opcaoFosco = criarOpcao("Vidro fosco", foscoLigado, () -> {
-            prefs.edit().putBoolean("fosco", !foscoLigado).apply();
-            recreate();
-        });
-        painel.addView(opcaoFosco, opcaoParams());
-        focoInicial = opcaoFosco;
-
-        painel.addView(criarOpcao("Nomes dos apps", nomesLigados, () -> {
-            prefs.edit().putBoolean("nomes", !nomesLigados).apply();
-            recreate();
-        }), opcaoParams());
-
-        TextView nota = texto("Cidade do clima: " + CIDADE
-                + " (para mudar, edite a linha CIDADE no código).", 26, SUAVE);
-        nota.setPadding(0, u(20), 0, 0);
-        painel.addView(nota);
-
-        colocar(painel, 560, 150, 1300, 850);
-    }
-
-    private LinearLayout.LayoutParams opcaoParams() {
-        LinearLayout.LayoutParams p = lp(TODO, u(84));
-        p.bottomMargin = u(14);
-        return p;
-    }
-
-    private View criarOpcao(String nome, boolean ligado, final Runnable acao) {
-        LinearLayout linha = horizontal();
-        linha.setGravity(Gravity.CENTER_VERTICAL);
-        linha.setPadding(u(30), 0, u(30), 0);
-        linha.setFocusable(true);
-        linha.setBackground(fundoFoco(34, criarVidro(34)));
-        linha.addView(texto(nome, 34, BRANCO), lp(0, AUTO, 1f));
-        linha.addView(texto(ligado ? "Ligado" : "Desligado", 32, AZUL));
-        linha.setOnClickListener(v -> acao.run());
-        return linha;
-    }
-
-    // ---------- Loja e ajustes ----------
-
-    private void abrirLoja() {
-        ResolveInfo loja = acharApp("com.android.vending");
-        if (loja == null) {
-            loja = acharPorNome("play store");
-        }
-        if (loja != null) {
-            abrir(loja);
-        } else {
-            Toast.makeText(this, "Loja de apps não encontrada", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void abrirAjustes() {
-        try {
-            Intent intent = new Intent(Settings.ACTION_SETTINGS);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-        } catch (Exception e) {
-            Toast.makeText(this, "Não foi possível abrir os ajustes", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    // ---------- Clima (Open-Meteo, sem chave) ----------
-
-    private void carregarClima() {
-        if (CIDADE.isEmpty()) {
-            return;
-        }
-        try {
-            String busca = "https://geocoding-api.open-meteo.com/v1/search?count=1"
-                    + "&language=pt&format=json&name=" + URLEncoder.encode(CIDADE, "UTF-8");
-            JSONArray resultados = new JSONObject(baixarTexto(busca)).optJSONArray("results");
-            if (resultados == null || resultados.length() == 0) {
-                return;
-            }
-            JSONObject lugar = resultados.getJSONObject(0);
-            double lat = lugar.getDouble("latitude");
-            double lon = lugar.getDouble("longitude");
-            String nome = lugar.optString("name", CIDADE);
-
-            String previsao = "https://api.open-meteo.com/v1/forecast"
-                    + "?current=temperature_2m,weather_code&timezone=auto"
-                    + "&latitude=" + lat + "&longitude=" + lon;
-            JSONObject atual = new JSONObject(baixarTexto(previsao)).getJSONObject("current");
-            double temperatura = atual.getDouble("temperature_2m");
-            int codigo = atual.getInt("weather_code");
-
-            climaCidade = nome;
-            climaTemp = Math.round(temperatura) + "°";
-            climaDesc = descricaoClima(codigo);
-        } catch (Exception e) {
-            climaDesc = "Sem dados do clima";
-        }
-        runOnUiThread(this::aplicarClima);
-    }
 
     private String descricaoClima(int codigo) {
         if (codigo == 0) {
@@ -1632,4 +1527,4 @@ public class MainActivity extends Activity {
     private LinearLayout.LayoutParams lp(int largura, int altura, float peso) {
         return new LinearLayout.LayoutParams(largura, altura, peso);
     }
-    }
+}
